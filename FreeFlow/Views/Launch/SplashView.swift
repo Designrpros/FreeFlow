@@ -25,6 +25,7 @@ struct SplashView: View {
     @State private var animateBackgroundWords = false
     @State private var placedWords: [SplashWordPlacement] = []
     
+    // FIXED: Resolves the light/dark mode flag using your decoupled system settings
     private var isDarkMode: Bool {
         if settings.appTheme == .system {
             return systemColorScheme == .dark
@@ -32,8 +33,9 @@ struct SplashView: View {
         return settings.appTheme == .dark
     }
     
+    // FIXED: Reads background layout configurations safely from your new canvasColor property store
     private var backgroundColor: Color {
-        isDarkMode ? Color(white: 0.08) : Color(white: 0.96)
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
     
     private var logoColor: Color {
@@ -97,7 +99,6 @@ struct SplashView: View {
             let item = SplashWordPlacement(
                 text: targetWord,
                 size: CGFloat.random(in: 13...24),
-                // FIXED: Increased baseline opacity variables to bring out word crispness safely
                 opacity: isDarkMode ? Double.random(in: 0.06...0.12) : Double.random(in: 0.07...0.14),
                 rotation: Double.random(in: -18...18),
                 offsetX: CGFloat.random(in: -450...450),

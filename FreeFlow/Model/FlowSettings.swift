@@ -26,10 +26,12 @@ enum WordSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// FIXED: Restored to standard system interface overrides
 enum AppTheme: String, CaseIterable, Identifiable {
     case system = "System"
     case light = "Light"
     case dark = "Dark"
+    
     var id: String { rawValue }
     
     var colorScheme: ColorScheme? {
@@ -37,6 +39,52 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .system: return nil
         case .light: return .light
         case .dark: return .dark
+        }
+    }
+}
+
+// FIXED: Created a distinct property layer managing background color signatures independently
+enum CanvasColor: String, CaseIterable, Identifiable {
+    case defaultGray = "Default"
+    case monochrome = "Monochrome"
+    case ember = "Ember"
+    case oceanic = "Oceanic"
+    case midnight = "Midnight"
+    
+    var id: String { rawValue }
+    
+    func backgroundColor(isDark: Bool) -> Color {
+        switch self {
+        case .defaultGray:
+            return isDark ? Color(white: 0.12) : Color(white: 0.95)
+        case .monochrome:
+            return isDark ? Color(white: 0.05) : Color(white: 1.0)
+        case .ember:
+            return isDark ? Color(red: 0.25, green: 0.11, blue: 0.04) : Color(red: 0.96, green: 0.91, blue: 0.86)
+        case .oceanic:
+            return isDark ? Color(red: 0.09, green: 0.20, blue: 0.17) : Color(red: 0.88, green: 0.94, blue: 0.92)
+        case .midnight:
+            return isDark ? Color(red: 0.10, green: 0.09, blue: 0.18) : Color(red: 0.91, green: 0.90, blue: 0.96)
+        }
+    }
+}
+
+enum AppAccent: String, CaseIterable, Identifiable {
+    case defaultBlue = "Default"
+    case monochrome = "Monochrome"
+    case ember = "Ember"
+    case oceanic = "Oceanic"
+    case midnight = "Midnight"
+    
+    var id: String { rawValue }
+    
+    var color: Color {
+        switch self {
+        case .defaultBlue: return .blue
+        case .monochrome:  return .primary
+        case .ember:       return .orange
+        case .oceanic:     return .teal
+        case .midnight:    return .purple
         }
     }
 }
@@ -54,16 +102,16 @@ final class FlowSettings: ObservableObject {
 
     @Published var showAdvanced: Bool = false
     @Published var appTheme: AppTheme = .system
+    @Published var canvasColor: CanvasColor = .defaultGray
+    @Published var appAccent: AppAccent = .defaultBlue
+    
     @Published var preventScreenLock: Bool = true
     @Published var loopWithCrossfade: Bool = true
     
     @Published var selectedTrack: String = "Chrome_On_The_Curb"
     @Published var endBehavior: PlaybackEndBehavior = .loopTrack
     
-    // THE EXTENDED TRACKING VARIABLES
     @Published var customFocusWord: String = ""
-    
-    // NEW PROPERTY: Dictates whether the interface presents the custom anchor word override fields
     @Published var useManualAnchor: Bool = false
 
     @Published var refreshInterval: Double = 10.0
@@ -82,17 +130,13 @@ final class FlowSettings: ObservableObject {
         "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"
     ]
     
-    // Memory retain handling structures for the Combine observation subscription closure
     private let appViewModel = AppViewModel()
     private var cancellables = Set<AnyCancellable>()
     
     init() {
         refreshTracksRoster()
-        
-        // 1. Instantly pull previously saved state from local storage disk space on class initialization
         appViewModel.loadSavedSettings(into: self)
         
-        // 2. Monitor changes to internal configurations and write updates to storage on the next loop tick
         self.objectWillChange
             .sink { [weak self] _ in
                 guard let self = self else { return }

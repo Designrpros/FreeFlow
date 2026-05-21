@@ -8,17 +8,31 @@
 import SwiftUI
 
 struct RhymesView: View {
+    @EnvironmentObject private var settings: FlowSettings
     @State private var searchText: String = "fame"
     @State private var rhymes: [DatamuseWord] = []
     @State private var isLoading: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
+    // FIXED: Evaluates interface light/dark states through your decoupled theme variables
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
+    }
+    
+    // FIXED: Pulls backend layout color arrays matching your global background configurations
+    private var workspaceBackground: Color {
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
+    }
+    
     private var mainTextColor: Color {
-        colorScheme == .dark ? .white : .black
+        isDarkMode ? .white : .black
     }
     
     private var cardBackground: Color {
-        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
+        isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
     }
     
     var body: some View {
@@ -43,7 +57,7 @@ struct RhymesView: View {
                 }
             }
             .padding(8)
-            .background(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
+            .background(isDarkMode ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
             .cornerRadius(10)
             .padding()
             
@@ -61,7 +75,7 @@ struct RhymesView: View {
                         } else {
                             Text("Rhyme Stream Matches Found: \(rhymes.count)")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(mainTextColor.opacity(0.4))
                         }
                     }
                     .padding(.top)
@@ -70,7 +84,7 @@ struct RhymesView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Rhyming Companion Index")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(mainTextColor.opacity(0.4))
                         
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 12)], spacing: 12) {
                             ForEach(rhymes) { item in
@@ -83,7 +97,8 @@ struct RhymesView: View {
                                     if let syllables = item.numSyllables {
                                         Text("\(syllables) syllable\(syllables == 1 ? "" : "s")")
                                             .font(.system(size: 9, design: .monospaced))
-                                            .foregroundColor(.blue.opacity(0.8))
+                                            // FIXED: Tints grid subheaders to follow your active Accent Theme smoothly
+                                            .foregroundColor(settings.appAccent.color.opacity(0.9))
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
@@ -97,6 +112,8 @@ struct RhymesView: View {
                 }
             }
         }
+        // FIXED: Implements full layout backplate background tracking from settings choices
+        .background(workspaceBackground.ignoresSafeArea())
         .task {
             // Initial network payload evaluation on screen launch
             executeRhymeSearch()
@@ -119,5 +136,5 @@ struct RhymesView: View {
 
 #Preview {
     RhymesView()
-        .background(Color(white: 0.12))
+        .environmentObject(FlowSettings())
 }

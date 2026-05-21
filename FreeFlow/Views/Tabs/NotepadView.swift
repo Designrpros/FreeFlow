@@ -10,6 +10,7 @@ import CoreData
 
 struct NotepadView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var settings: FlowSettings
     @Environment(\.colorScheme) private var colorScheme
     
     @FetchRequest(
@@ -20,12 +21,26 @@ struct NotepadView: View {
     
     @State private var selectedNote: FlowNoteEntity? = nil
     
-    private var workspaceBackground: Color {
-        colorScheme == .dark ? Color(white: 0.15) : Color.white
+    // FIXED: Evaluates dark mode state via decoupled app appearance variables
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
     }
     
+    // FIXED: Uses the unified theme color canvas engine for the writing workspace backplate
+    private var workspaceBackground: Color {
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
+    }
+    
+    // FIXED: Formulates a slightly deeper variant background layer for the navigation sidebar structure
     private var sidebarBackground: Color {
-        colorScheme == .dark ? Color(white: 0.10) : Color(white: 0.97)
+        isDarkMode ? Color.black.opacity(0.15) : Color.black.opacity(0.03)
+    }
+    
+    private var mainTextColor: Color {
+        isDarkMode ? .white : .black
     }
 
     var body: some View {
@@ -41,10 +56,10 @@ struct NotepadView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text((note.title ?? "").isEmpty ? "Untitled Sheet" : (note.title ?? ""))
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(mainTextColor)
                                 Text((note.content ?? "").isEmpty ? "No lyrics yet..." : (note.content ?? ""))
                                     .font(.system(size: 11))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(mainTextColor.opacity(0.4))
                                     .lineLimit(1)
                             }
                             Spacer()
@@ -63,8 +78,6 @@ struct NotepadView: View {
             .scrollContentBackground(.hidden)
             .background(sidebarBackground)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
-            
-            // FIXED: Using navigation inline structures cleanly places the actions up top
             .navigationTitle("My Sheets")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -74,6 +87,8 @@ struct NotepadView: View {
                     Button(action: createNewNoteAction) {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 14, weight: .semibold))
+                            // FIXED: Tints tool accents cleanly to your active AppAccent color palette choice
+                            .foregroundColor(settings.appAccent.color)
                     }
                 }
             }
@@ -82,10 +97,10 @@ struct NotepadView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "note.text")
                             .font(.system(size: 24))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundColor(mainTextColor.opacity(0.3))
                         Text("No notes saved")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(mainTextColor.opacity(0.4))
                     }
                 }
             }
@@ -100,16 +115,18 @@ struct NotepadView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "text.alignleft")
                         .font(.system(size: 32))
-                        .foregroundColor(.secondary.opacity(0.3))
+                        .foregroundColor(mainTextColor.opacity(0.2))
                     Text("Select a sheet or click the pencil icon to begin writing.")
                         .font(.system(size: 13, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(mainTextColor.opacity(0.4))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(workspaceBackground)
             }
         }
         .navigationSplitViewStyle(.balanced)
+        // FIXED: Applies global theme background colors safely across the absolute split root
+        .background(workspaceBackground.ignoresSafeArea())
         .onAppear {
             if selectedNote == nil, let first = databaseNotes.first {
                 selectedNote = first
@@ -133,8 +150,10 @@ struct NotepadView: View {
             .textFieldStyle(.plain)
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+            .foregroundColor(mainTextColor)
             
-            Divider().opacity(0.1)
+            Divider()
+                .opacity(isDarkMode ? 0.1 : 0.2)
             
             TextEditor(text: Binding(
                 get: { activeNote.content ?? "" },
@@ -145,6 +164,7 @@ struct NotepadView: View {
                 }
             ))
             .font(.system(size: 14, design: .monospaced))
+            .foregroundColor(mainTextColor)
             .padding(20)
             .scrollContentBackground(.hidden)
             .background(workspaceBackground)

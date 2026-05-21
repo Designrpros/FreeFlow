@@ -22,8 +22,11 @@ final class AppViewModel: ObservableObject {
     private let kLoopWithCrossfade = "ff_loop_with_crossfade"
     private let kEndBehavior = "ff_end_behavior"
     private let kAppTheme = "ff_app_theme"
-    // FIXED: Appended storage key key token for the manual anchor switch flag state
     private let kUseManualAnchor = "ff_use_manual_anchor"
+    
+    // FIXED: Added local storage persistent tokens for the newly segregated components
+    private let kCanvasColor = "ff_canvas_color"
+    private let kAppAccent = "ff_app_accent"
 
     init() {
         // AppViewModel can remain an active global lifecycle hook if needed
@@ -67,7 +70,6 @@ final class AppViewModel: ObservableObject {
             settings.loopWithCrossfade = defaults.bool(forKey: kLoopWithCrossfade)
         }
         
-        // FIXED: Hydrates the new manual target switch state properly from disc references
         if defaults.object(forKey: kUseManualAnchor) != nil {
             settings.useManualAnchor = defaults.bool(forKey: kUseManualAnchor)
         }
@@ -75,8 +77,20 @@ final class AppViewModel: ObservableObject {
         if let rawBehavior = defaults.string(forKey: kEndBehavior), let behavior = PlaybackEndBehavior(rawValue: rawBehavior) {
             settings.endBehavior = behavior
         }
+        
+        // FIXED: Appearance theme handles standard system light/dark settings dynamically
         if let rawTheme = defaults.string(forKey: kAppTheme), let theme = AppTheme(rawValue: rawTheme) {
             settings.appTheme = theme
+        }
+        
+        // FIXED: De-serializes your custom canvas backgrounds natively
+        if let rawCanvas = defaults.string(forKey: kCanvasColor), let canvas = CanvasColor(rawValue: rawCanvas) {
+            settings.canvasColor = canvas
+        }
+        
+        // FIXED: De-serializes your user interface highlights seamlessly
+        if let rawAccent = defaults.string(forKey: kAppAccent), let accent = AppAccent(rawValue: rawAccent) {
+            settings.appAccent = accent
         }
     }
     
@@ -92,9 +106,12 @@ final class AppViewModel: ObservableObject {
         defaults.set(settings.selectedTrack, forKey: kSelectedTrack)
         defaults.set(settings.preventScreenLock, forKey: kPreventScreenLock)
         defaults.set(settings.loopWithCrossfade, forKey: kLoopWithCrossfade)
-        // FIXED: Persists toggle positions continuously into disk slots on changes
         defaults.set(settings.useManualAnchor, forKey: kUseManualAnchor)
         defaults.set(settings.endBehavior.rawValue, forKey: kEndBehavior)
+        
+        // FIXED: Persists all independent aesthetic custom choices safely onto the drive layers
         defaults.set(settings.appTheme.rawValue, forKey: kAppTheme)
+        defaults.set(settings.canvasColor.rawValue, forKey: kCanvasColor)
+        defaults.set(settings.appAccent.rawValue, forKey: kAppAccent)
     }
 }

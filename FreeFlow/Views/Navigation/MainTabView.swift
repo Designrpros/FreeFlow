@@ -8,39 +8,37 @@
 import SwiftUI
 import CoreData
 
-// FIXED: Added an inspector state tracking enum to swap desktop side panels dynamically
 enum DesktopSidebarContent {
     case inspector
     case mediaCenter
 }
 
 struct MainTabView: View {
-    @Binding var selectedTab: MainTab
-    @Binding var showingInspector: Bool
+    @MainActor @Binding var selectedTab: MainTab
+    @MainActor @Binding var showingInspector: Bool
     
-    // Mobile-only sheet toggle flags
     @State private var showingMediaCenterMobile = false
     @State private var showingMobileInspector = false
-    
-    // FIXED: Tracks which active panel should display in the macOS sidebar frame
     @State private var currentSidebarContent: DesktopSidebarContent = .inspector
     
     @EnvironmentObject private var settings: FlowSettings
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.95)
-    }
-    
     private var isCompact: Bool {
         horizontalSizeClass == .compact
+    }
+
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
     }
 
     var body: some View {
         HStack(spacing: 0) {
             TabView(selection: $selectedTab) {
-                // FLOW TAB
                 NavigationStack {
                     FlowView()
                         .navigationTitle(isCompact ? "FreeFlow" : "")
@@ -49,7 +47,6 @@ struct MainTabView: View {
                         #endif
                         .toolbar {
                             ToolbarItemGroup(placement: .primaryAction) {
-                                // STUDIO MEDIA CENTER TOGGLE
                                 Button {
                                     if isCompact {
                                         showingMediaCenterMobile = true
@@ -69,7 +66,6 @@ struct MainTabView: View {
                                 }
                                 .help("Open Studio Media Center")
                                 
-                                // CONFIGURATION INSPECTOR TOGGLE
                                 Button {
                                     if isCompact {
                                         showingMobileInspector = true
@@ -96,7 +92,6 @@ struct MainTabView: View {
                     Label("Flow", systemImage: "waveform")
                 }
 
-                // RHYMES TAB
                 NavigationStack {
                     RhymesView()
                         .navigationTitle("Rhymes")
@@ -109,7 +104,6 @@ struct MainTabView: View {
                     Label("Rhymes", systemImage: "textformat.abc")
                 }
 
-                // EXPLORE TAB
                 NavigationStack {
                     ExploreView()
                         .navigationTitle("Explore")
@@ -122,7 +116,6 @@ struct MainTabView: View {
                     Label("Explore", systemImage: "safari")
                 }
 
-                // NOTEPAD TAB
                 NotepadView()
                     .tag(MainTab.notepad)
                     .tabItem {
@@ -130,41 +123,38 @@ struct MainTabView: View {
                     }
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
             }
-            .background(backgroundColor)
+            .background(Color.clear)
             
-            // FIXED: DYNAMIC DESKTOP SIDEBAR CONTAINER (Only mounts on Regular viewports during Flow sessions)
             if showingInspector && !isCompact && selectedTab == .flow {
                 Divider()
-                    .opacity(colorScheme == .dark ? 0.1 : 0.3)
+                    .opacity(isDarkMode ? 0.1 : 0.3)
                 
                 VStack(spacing: 0) {
                     switch currentSidebarContent {
                     case .inspector:
                         FlowInspectorView()
                             .environmentObject(settings)
-                            .id(settings.appTheme)
+                            // FIXED: Removed the disruptive .id(...) token wrapper entirely
+                            // to preserve internal scroll positions during layout changes
                     case .mediaCenter:
-                        // FIXED: Renders the media center inside the permanent canvas on macOS
                         MediaCenterView()
                             .environmentObject(settings)
-                            .id(settings.appTheme)
+                            // FIXED: Removed the disruptive .id(...) token wrapper here too
                     }
                 }
                 .frame(width: 320)
                 .transition(.move(edge: .trailing))
             }
         }
-        .background(backgroundColor.ignoresSafeArea())
+        .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
         
-        // --- MOBILE ONLY REGION ---
-        // These sheets only activate on compact iOS environments, keeping macOS completely native
         #if os(iOS)
         .sheet(isPresented: $showingMediaCenterMobile) {
             NavigationStack {
                 MediaCenterView()
             }
             .environmentObject(settings)
-            .id(settings.appTheme)
+            .id(settings.canvasColor.rawValue + settings.appTheme.rawValue + settings.appAccent.rawValue)
         }
         .sheet(isPresented: $showingMobileInspector) {
             NavigationStack {
@@ -180,13 +170,8 @@ struct MainTabView: View {
                     }
             }
             .environmentObject(settings)
-            .id(settings.appTheme)
+            .id(settings.canvasColor.rawValue + settings.appTheme.rawValue + settings.appAccent.rawValue)
         }
         #endif
     }
-}
-
-#Preview {
-    MainTabView(selectedTab: .constant(.flow), showingInspector: .constant(true))
-        .environmentObject(FlowSettings())
 }

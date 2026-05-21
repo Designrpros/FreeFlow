@@ -8,17 +8,31 @@
 import SwiftUI
 
 struct ExploreView: View {
+    @EnvironmentObject private var settings: FlowSettings
     @State private var searchText: String = "fame"
     @State private var words: [DatamuseWord] = []
     @State private var isLoading: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
+    // FIXED: Evaluates light/dark canvas states cleanly from your decoupled settings property wrapper
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
+    }
+    
+    // FIXED: Pulls background colors dynamically matching other studio workspace tabs
+    private var workspaceBackground: Color {
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
+    }
+    
     private var mainTextColor: Color {
-        colorScheme == .dark ? .white : .black
+        isDarkMode ? .white : .black
     }
     
     private var cardBackground: Color {
-        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
+        isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
     }
 
     var body: some View {
@@ -37,7 +51,7 @@ struct ExploreView: View {
                 }
             }
             .padding(8)
-            .background(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
+            .background(isDarkMode ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
             .cornerRadius(10)
             .padding()
             
@@ -46,10 +60,10 @@ struct ExploreView: View {
                     Spacer()
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 28))
-                        .foregroundColor(.secondary.opacity(0.4))
+                        .foregroundColor(mainTextColor.opacity(0.3))
                     Text("Press enter to search concept meanings")
                         .font(.system(size: 13, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(mainTextColor.opacity(0.4))
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -64,7 +78,8 @@ struct ExploreView: View {
                                 if let syllables = item.numSyllables {
                                     Text("\(syllables) syl")
                                         .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(.blue)
+                                        // FIXED: Re-tinted syllable counter labels to match your active Accent Theme selection perfectly
+                                        .foregroundColor(settings.appAccent.color)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -76,6 +91,8 @@ struct ExploreView: View {
                 .scrollContentBackground(.hidden)
             }
         }
+        // FIXED: Sets explicit background layer tracking matching chosen layout presets natively
+        .background(workspaceBackground.ignoresSafeArea())
         .task {
             // Initial payload load on view appear
             executeExploreSearch()
@@ -98,5 +115,5 @@ struct ExploreView: View {
 
 #Preview {
     ExploreView()
-        .background(Color(white: 0.12))
+        .environmentObject(FlowSettings())
 }

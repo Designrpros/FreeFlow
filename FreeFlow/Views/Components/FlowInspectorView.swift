@@ -17,31 +17,37 @@ struct FlowInspectorView: View {
     @State private var showUploadedTracks: Bool = true
     @State private var showStudioAssets: Bool = true
 
-    // NATIVE CORE DATA SOURCE: Monitors cloud changes to our user-uploaded audio track listings live
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \UploadedTrackEntity.dateAdded, ascending: true)],
         animation: .default
     )
     private var coreDataUploadedTracks: FetchedResults<UploadedTrackEntity>
 
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
+    }
+
     private var panelBackground: Color {
-        colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.95)
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
     
     private var cardBackground: Color {
-        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
+        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
     }
     
     private var mainTextColor: Color {
-        colorScheme == .dark ? .white : .black
+        isDarkMode ? .white : .black
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.5)
+        isDarkMode ? .white.opacity(0.4) : .black.opacity(0.5)
     }
     
     private var lineSeparatorColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
+        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
     }
     
     private var factoryTracks: [String] {
@@ -65,7 +71,7 @@ struct FlowInspectorView: View {
                                     .foregroundColor(mainTextColor)
                                 Spacer()
                                 Image(systemName: settings.freestyleMode == mode ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(settings.freestyleMode == mode ? .blue : secondaryTextColor.opacity(0.6))
+                                    .foregroundColor(settings.freestyleMode == mode ? settings.appAccent.color : secondaryTextColor.opacity(0.6))
                             }
                             .padding()
                             .contentShape(Rectangle())
@@ -82,7 +88,7 @@ struct FlowInspectorView: View {
                     .cornerRadius(8)
                 }
 
-                // FIXED SECTION: SMART FOCUS WORD MONITOR CONTROL
+                // SMART FOCUS WORD MONITOR CONTROL
                 if settings.freestyleMode == .wordFlowPlusRhymes {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Focus Word Control")
@@ -90,17 +96,15 @@ struct FlowInspectorView: View {
                             .foregroundColor(secondaryTextColor)
                         
                         VStack(spacing: 12) {
-                            // Master toggle controls manual overrides vs fully automated generation
                             HStack {
                                 Label("Manual Anchor Word", systemImage: "pin.circle.fill")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(mainTextColor)
                                 Spacer()
                                 Toggle("", isOn: $settings.useManualAnchor)
-                                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                    .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
                                     .labelsHidden()
                                     .onChange(of: settings.useManualAnchor) { oldValue, newValue in
-                                        // Unblocks the auto-engine instantly if the user disables manual targets
                                         if !newValue {
                                             settings.customFocusWord = ""
                                         }
@@ -129,7 +133,7 @@ struct FlowInspectorView: View {
                                     TextField("Type target word (e.g., Flame)...", text: $settings.customFocusWord)
                                         .textFieldStyle(.plain)
                                         .padding(10)
-                                        .background(colorScheme == .dark ? Color.black.opacity(0.2) : Color.white)
+                                        .background(isDarkMode ? Color.black.opacity(0.2) : Color.white)
                                         .cornerRadius(6)
                                         .foregroundColor(mainTextColor)
                                         .font(.system(size: 13, design: .monospaced))
@@ -147,7 +151,7 @@ struct FlowInspectorView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "sparkles")
                                         .font(.system(size: 12))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(settings.appAccent.color)
                                     Text("Engine is automatically generating random anchors on tap.")
                                         .font(.system(size: 11))
                                         .foregroundColor(secondaryTextColor)
@@ -229,7 +233,7 @@ struct FlowInspectorView: View {
                                     .foregroundColor(mainTextColor)
                                 Spacer()
                                 Image(systemName: settings.wordSource == source ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(settings.wordSource == source ? .blue : secondaryTextColor.opacity(0.6))
+                                    .foregroundColor(settings.wordSource == source ? settings.appAccent.color : secondaryTextColor.opacity(0.6))
                             }
                             .padding()
                             .contentShape(Rectangle())
@@ -366,6 +370,7 @@ struct FlowInspectorView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Divider().background(lineSeparatorColor)
                             
+                            // 1. TRACK ENDING BEHAVIOR
                             HStack {
                                 Text("Track Ending Behavior")
                                     .font(.system(size: 13, weight: .medium))
@@ -382,6 +387,7 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
+                            // 2. APPEARANCE MODE (FIXED: Handles standard Light, Dark, System overrides)
                             HStack {
                                 Text("Appearance Theme")
                                     .font(.system(size: 13, weight: .medium))
@@ -398,10 +404,45 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
+                            // 3. CANVAS COLOR SELECTOR (FIXED: Houses your beautiful custom canvas options)
+                            HStack {
+                                Text("Canvas Color")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(mainTextColor)
+                                Spacer()
+                                Picker("", selection: $settings.canvasColor) {
+                                    ForEach(CanvasColor.allCases) { canvas in
+                                        Text(canvas.rawValue).tag(canvas)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+                            
+                            Divider().background(lineSeparatorColor)
+                            
+                            // 4. ACCENT THEME
+                            HStack {
+                                Text("Accent Theme")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(mainTextColor)
+                                Spacer()
+                                Picker("", selection: $settings.appAccent) {
+                                    ForEach(AppAccent.allCases) { accent in
+                                        Text(accent.rawValue).tag(accent)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+                            
+                            Divider().background(lineSeparatorColor)
+                            
+                            // 5. SCREEN LOCK TOGGLE
                             HStack(alignment: .center, spacing: 12) {
                                 Image(systemName: "lock.slash")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(settings.appAccent.color)
                                     .frame(width: 20, alignment: .leading)
                                 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -421,7 +462,7 @@ struct FlowInspectorView: View {
                                 )) {
                                     Text("")
                                 }
-                                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
                                 .labelsHidden()
                             }
                             .padding(.vertical, 2)
@@ -444,7 +485,7 @@ struct FlowInspectorView: View {
         HStack {
             Image(systemName: isCustom ? "icloud.and.arrow.up" : "music.note")
                 .font(.system(size: 12))
-                .foregroundColor(isSelected ? .blue : secondaryTextColor)
+                .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -463,12 +504,12 @@ struct FlowInspectorView: View {
             if audioManager.isPlaying && audioManager.activeTrackTitle == identifier {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
-                    .foregroundColor(.blue)
+                    .foregroundColor(settings.appAccent.color)
             }
             
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 14))
-                .foregroundColor(isSelected ? .blue : secondaryTextColor.opacity(0.6))
+                .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor.opacity(0.6))
         }
         .padding()
         .contentShape(Rectangle())

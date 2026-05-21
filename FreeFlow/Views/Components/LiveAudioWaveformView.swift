@@ -10,7 +10,6 @@ import Combine
 
 struct LiveAudioWaveformView: View {
     @ObservedObject private var audioManager = AudioManager.shared
-    @Environment(\.colorScheme) private var colorScheme
     
     private let barCount = 8
     private let timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
@@ -19,22 +18,13 @@ struct LiveAudioWaveformView: View {
     
     @State private var barAmplitudes: [CGFloat] = [15, 25, 18, 30, 22, 28, 16, 20]
     
-    // Theme-driven dynamic content color mapping
-    private var contentColor: Color {
-        colorScheme == .dark ? .white : .black
-    }
-    
-    // FIXED: Waveform dynamically shifts color matrix context to match navigation controls
-    private var activeWaveformColor: Color {
-        audioManager.isPlaying ? .blue : contentColor.opacity(0.6)
-    }
-    
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    // FIXED: Replaced static white fill with our matched reactive color token
-                    .fill(activeWaveformColor)
+                    // FIXED: Using .foregroundStyle(.foreground) lets this view natively adapt
+                    // to the exact .foregroundColor color values supplied by the parent parent stack layout!
+                    .fill(.foreground)
                     .frame(width: 8, height: barAmplitudes[index])
                     .animation(.easeInOut(duration: 0.2), value: barAmplitudes[index])
             }
@@ -69,5 +59,6 @@ struct LiveAudioWaveformView: View {
     ZStack {
         Color.black.ignoresSafeArea()
         LiveAudioWaveformView()
+            .foregroundColor(.orange) // Preview check to confirm accent injection flows natively
     }
 }

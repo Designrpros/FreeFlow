@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import Combine // Exposes the 'Publishers' type scope for the timer setup
+import Combine
 
 struct FlowView: View {
     @EnvironmentObject private var settings: FlowSettings
@@ -14,31 +14,34 @@ struct FlowView: View {
     @StateObject private var audioManager = AudioManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Thread-safe explicit initializer ensuring the ViewModel is instantiated on the MainActor
     init() {
         _vm = StateObject(wrappedValue: FlowViewModel())
     }
 
-    private var contentColor: Color {
-        colorScheme == .dark ? .white : .black
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
     }
 
-    /// Dynamically scales font size based on the number of active rows to prevent layout clipping
+    private var contentColor: Color {
+        isDarkMode ? .white : .black
+    }
+
     private var dynamicFontSize: CGFloat {
         switch settings.numberOfWords {
         case 1...3: return 42
         case 4:    return 38
         case 5:    return 32
-        default:   return 28 // 6 words scale target
+        default:   return 28
         }
     }
 
-    /// Dynamically adjusts row spacing depending on stack density
     private var dynamicSpacing: CGFloat {
         settings.numberOfWords > 4 ? 16 : 24
     }
 
-    /// Helper computed property inside the struct to manage the timer interval state
     private var automaticTimer: Publishers.Autoconnect<Timer.TimerPublisher> {
         Timer.publish(every: settings.refreshInterval, on: .main, in: .common).autoconnect()
     }
@@ -47,33 +50,26 @@ struct FlowView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            // Dynamic Lyrics Stack Display Canvas
             Button {
                 vm.refresh(using: settings)
             } label: {
                 VStack(spacing: dynamicSpacing) {
                     if vm.isLoading {
-                        // Visual activity feedback during Datamuse API network calls
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: contentColor))
                             .scaleEffect(1.2)
                     } else if settings.freestyleMode == .wordFlowPlusRhymes && !vm.words.isEmpty {
-                        // FOCUS WORD + RHYMES DESIGN LAYOUT
-                        
-                        // 1. The Big Focus Word Header (Highlighted Anchor)
                         Text(vm.words[0])
                             .font(.system(size: 48, weight: .bold, design: .rounded))
-                            .foregroundColor(.blue)
+                            .foregroundColor(settings.appAccent.color)
                             .lineLimit(1)
                         
-                        // 2. Clean Horizontal Divider Line
                         Rectangle()
                             .fill(contentColor.opacity(0.15))
                             .frame(height: 1)
                             .padding(.horizontal, 40)
                             .padding(.vertical, 8)
                         
-                        // 3. Vertical Sub-Rhyme Stream
                         VStack(spacing: 12) {
                             ForEach(1..<min(vm.words.count, settings.numberOfWords), id: \.self) { index in
                                 Text(vm.words[index])
@@ -83,7 +79,6 @@ struct FlowView: View {
                             }
                         }
                     } else {
-                        // STANDARD KEYWORDS FLAT LIST LAYOUT
                         VStack(spacing: dynamicSpacing) {
                             ForEach(0..<min(vm.words.count, settings.numberOfWords), id: \.self) { index in
                                 Text(vm.words[index])
@@ -103,10 +98,8 @@ struct FlowView: View {
             
             Spacer()
             
-            // Interactive Media Control Studio Footer Module
             VStack(spacing: 24) {
                 HStack(spacing: 40) {
-                    // BACKWARD TRACK CONTROL BUTTON
                     Button {
                         navigateTrack(forward: false)
                     } label: {
@@ -116,9 +109,12 @@ struct FlowView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    // UPDATED ACTIVE ELEMENT: Central Live Recording Waveform Canvas
+                    // Central Live Recording Waveform Canvas
                     VStack(spacing: 0) {
                         LiveAudioWaveformView()
+                            // Sets the baseline idle color to gray, and dynamically transitions
+                            // to your selected Accent Theme color when the track is actively playing!
+                            .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -129,7 +125,6 @@ struct FlowView: View {
                         }
                     }
                     
-                    // FORWARD TRACK CONTROL BUTTON
                     Button {
                         navigateTrack(forward: true)
                     } label: {
@@ -140,11 +135,10 @@ struct FlowView: View {
                     .buttonStyle(.plain)
                 }
                 
-                // CONTROL INSTRUCTIONS & PERFORMANCE STATUS STRIP
                 VStack(spacing: 6) {
                     Text(audioManager.isPlaying ? "Tap words to shuffle • Tap waveform to stop" : "Tap words to shuffle • Tap waveform to play")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(audioManager.isPlaying ? .blue.opacity(0.8) : contentColor.opacity(0.4))
+                        .foregroundColor(audioManager.isPlaying ? settings.appAccent.color.opacity(0.8) : contentColor.opacity(0.4))
                     
                     VStack(spacing: 2) {
                         Text(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack)
@@ -159,11 +153,11 @@ struct FlowView: View {
                 }
             }
             .padding(.bottom, 48)
-        }        
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { vm.ensureInitialized(using: settings) }
+        .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
         
-        // FIXED: Modernized onChange parameter signatures for iOS 17+ compliance
         .onChange(of: settings.numberOfWords) { oldValue, newValue in
             vm.refresh(using: settings)
         }
@@ -186,13 +180,7 @@ struct FlowView: View {
         let totalTracks = settings.availableTracks.count
         guard totalTracks > 0 else { return }
         
-        let newIndex: Int
-        if forward {
-            newIndex = (currentTrackIndex + 1) % totalTracks
-        } else {
-            newIndex = (currentTrackIndex - 1 + totalTracks) % totalTracks
-        }
-        
+        let newIndex = forward ? (currentTrackIndex + 1) % totalTracks : (currentTrackIndex - 1 + totalTracks) % totalTracks
         let nextTrackName = settings.availableTracks[newIndex]
         settings.selectedTrack = nextTrackName
         
@@ -200,9 +188,4 @@ struct FlowView: View {
             audioManager.play(trackName: nextTrackName, using: settings)
         }
     }
-}
-
-#Preview {
-    FlowView()
-        .environmentObject(FlowSettings())
 }

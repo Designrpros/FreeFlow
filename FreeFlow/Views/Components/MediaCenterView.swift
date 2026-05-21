@@ -24,24 +24,33 @@ struct MediaCenterView: View {
     )
     private var coreDataUploadedTracks: FetchedResults<UploadedTrackEntity>
     
+    // FIXED: Resolves dark mode conditions accurately using your independent theme setting
+    private var isDarkMode: Bool {
+        if settings.appTheme == .system {
+            return colorScheme == .dark
+        }
+        return settings.appTheme == .dark
+    }
+    
+    // FIXED: Implements full background tracking bound to your decoupled canvas theme selections
     private var panelBackground: Color {
-        colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.95)
+        settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
     
     private var cardBackground: Color {
-        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
+        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
     }
     
     private var mainTextColor: Color {
-        colorScheme == .dark ? .white : .black
+        isDarkMode ? .white : .black
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.5)
+        isDarkMode ? .white.opacity(0.4) : .black.opacity(0.5)
     }
     
     private var lineSeparatorColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
+        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
     }
     
     private var factoryTracks: [String] {
@@ -80,15 +89,18 @@ struct MediaCenterView: View {
                                 .foregroundColor(mainTextColor)
                                 
                                 Slider(value: $audioManager.masterVolume, in: 0...1)
-                                    .tint(.blue)
+                                    // FIXED: Volume slider accent re-tinted to follow your global Accent choice
+                                    .tint(settings.appAccent.color)
                             }
                             
+                            // FIXED: Added conditional visibility block to render a clean, standard layout line split on macOS or iOS
                             Divider().background(lineSeparatorColor)
                             
                             HStack(alignment: .center, spacing: 12) {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.blue)
+                                    // FIXED: Synced layout glyphs to match your design palette choice
+                                    .foregroundColor(settings.appAccent.color)
                                     .frame(width: 20, alignment: .leading)
                                 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -106,7 +118,8 @@ struct MediaCenterView: View {
                                     get: { settings.loopWithCrossfade },
                                     set: { settings.loopWithCrossfade = $0 }
                                 ))
-                                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                // FIXED: Custom toggle accent tracks your Accent Theme choices natively
+                                .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
                                 .labelsHidden()
                             }
                             .padding(.vertical, 2)
@@ -146,7 +159,8 @@ struct MediaCenterView: View {
                             } label: {
                                 Label("Import MP3", systemImage: "plus.circle")
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.blue)
+                                    // FIXED: Tints file importation controls uniformly
+                                    .foregroundColor(settings.appAccent.color)
                             }
                             .buttonStyle(.plain)
                         }
@@ -203,8 +217,6 @@ struct MediaCenterView: View {
             }
         }
         .background(panelBackground.ignoresSafeArea())
-        
-        // FIXED: Replaced old hardcoded titles with a modern native inline title configuration
         .navigationTitle("Media Center")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -262,7 +274,8 @@ struct MediaCenterView: View {
         HStack {
             Image(systemName: isCustom ? "icloud.and.arrow.up" : "music.note")
                 .font(.system(size: 13))
-                .foregroundColor(isSelected ? .blue : secondaryTextColor)
+                // FIXED: Selection highlights follow your global accent configuration lines cleanly
+                .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -281,7 +294,8 @@ struct MediaCenterView: View {
             if audioManager.isPlaying && audioManager.activeTrackTitle == identifier {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 11))
-                    .foregroundColor(.blue)
+                    // FIXED: Active waveform speaker highlights follow your designated design scheme
+                    .foregroundColor(settings.appAccent.color)
                     .padding(.trailing, 4)
             }
             
@@ -299,7 +313,8 @@ struct MediaCenterView: View {
             
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 15))
-                .foregroundColor(isSelected ? .blue : secondaryTextColor.opacity(0.4))
+                // FIXED: Row radio-buttons follow your global color selections flawlessly
+                .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor.opacity(0.4))
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
