@@ -12,6 +12,7 @@ enum MainTab: String, CaseIterable, Identifiable {
     case rhymes = "Rhymes"
     case explore = "Explore"
     case notepad = "Notepad"
+    case recordings = "Recordings"
     
     var id: String { rawValue }
 }

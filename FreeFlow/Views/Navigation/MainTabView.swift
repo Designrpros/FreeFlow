@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import AVFoundation
 
 enum DesktopSidebarContent {
     case inspector
@@ -47,6 +48,46 @@ struct MainTabView: View {
                         #endif
                         .toolbar {
                             ToolbarItemGroup(placement: .primaryAction) {
+                                
+                                // NEW: Studio Session Mic Recording Button
+                                Button {
+                                    if settings.isRecordingSession {
+                                        AudioRecorderManager.shared.stopRecording(settings: settings)
+                                    } else {
+                                        #if os(iOS)
+                                        // Dynamic cross-platform fallback for iOS target authorization hooks
+                                        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                                            if granted {
+                                                DispatchQueue.main.async {
+                                                    AudioRecorderManager.shared.startRecording(settings: settings)
+                                                }
+                                            }
+                                        }
+                                        #else
+                                        // macOS permissions are natively evaluated at runtime via Sandbox Capability switches
+                                        AudioRecorderManager.shared.startRecording(settings: settings)
+                                        #endif
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if settings.isRecordingSession {
+                                            // Blinking red status node displaying active session timeline tracking
+                                            Circle()
+                                                .fill(Color.red)
+                                                .frame(width: 8, height: 8)
+                                            Text(formatDuration(settings.recordingDuration))
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundColor(.red)
+                                        }
+                                        
+                                        Image(systemName: settings.isRecordingSession ? "mic.fill" : "mic")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(settings.isRecordingSession ? .red : settings.appAccent.color)
+                                    }
+                                }
+                                .help(settings.isRecordingSession ? "Stop Session Recording" : "Record Studio Session")
+                                
+                                // --- Existing Control Structure Elements ---
                                 Button {
                                     if isCompact {
                                         showingMediaCenterMobile = true
@@ -115,13 +156,25 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Explore", systemImage: "safari")
                 }
-
+                
                 NotepadView()
                     .tag(MainTab.notepad)
                     .tabItem {
                         Label("Notepad", systemImage: "note.text")
                     }
                     .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+
+                NavigationStack {
+                    RecordingsView()
+                        .navigationTitle("Recordings")
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                }
+                .tag(MainTab.recordings)
+                .tabItem {
+                    Label("Recordings", systemImage: "waveform.badge.mic")
+                }
             }
             .background(Color.clear)
             
@@ -173,5 +226,11 @@ struct MainTabView: View {
             .id(settings.canvasColor.rawValue + settings.appTheme.rawValue + settings.appAccent.rawValue)
         }
         #endif
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

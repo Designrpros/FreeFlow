@@ -125,6 +125,9 @@ final class FlowSettings: ObservableObject {
         }
     }
     
+    @Published var isRecordingSession: Bool = false
+    @Published var recordingDuration: TimeInterval = 0.0
+    
     let factoryTracks: [String] = [
         "Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch",
         "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"
@@ -148,6 +151,29 @@ final class FlowSettings: ObservableObject {
     }
     
     func refreshTracksRoster() {
-        self.availableTracks = factoryTracks
+        // 1. Start with your default built-in studio assets
+        var combinedTracks = factoryTracks
+        
+        // 2. Fetch all .m4a session recording files from the sandbox document directory
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        
+        do {
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            
+            // Filter for your recording sessions or any other valid custom audio formats (.m4a, .mp3)
+            let customTracks = fileURLs
+                .filter { $0.pathExtension == "m4a" || $0.pathExtension == "mp3" }
+                .map { $0.lastPathComponent } // Keep the extension so resolveAudioURL can parse it cleanly
+                .sorted()
+            
+            combinedTracks.append(contentsOf: customTracks)
+        } catch {
+            print("Failed to read sandboxed session files: \(error.localizedDescription)")
+        }
+        
+        // 3. Update the data stream on the main actor
+        DispatchQueue.main.async {
+            self.availableTracks = combinedTracks
+        }
     }
 }
