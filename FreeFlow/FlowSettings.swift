@@ -60,7 +60,11 @@ final class FlowSettings: ObservableObject {
     @Published var selectedTrack: String = "Chrome_On_The_Curb"
     @Published var endBehavior: PlaybackEndBehavior = .loopTrack
     
+    // THE EXTENDED TRACKING VARIABLES
     @Published var customFocusWord: String = ""
+    
+    // NEW PROPERTY: Dictates whether the interface presents the custom anchor word override fields
+    @Published var useManualAnchor: Bool = false
 
     @Published var refreshInterval: Double = 10.0
 

@@ -18,7 +18,6 @@ struct MediaCenterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     
-    // NATIVE FETCHED RESULTS: Monitors cloud changes to our user-uploaded audio track listings
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \UploadedTrackEntity.dateAdded, ascending: true)],
         animation: .default
@@ -51,36 +50,16 @@ struct MediaCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Studio Media Center")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(mainTextColor)
-                    Text("Configure engine parameters and manage custom local file sets")
-                        .font(.system(size: 11))
-                        .foregroundColor(secondaryTextColor)
-                }
-                
-                Spacer()
-                
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Done")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(cardBackground)
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(panelBackground)
-            
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    
+                    // SUB-TITLE DESCRIPTION HERO BLOCK
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Configure engine parameters and manage custom local file sets")
+                            .font(.system(size: 11))
+                            .foregroundColor(secondaryTextColor)
+                    }
+                    .padding(.top, 16)
                     
                     // CONFIGURATIONS PANEL CARD
                     VStack(alignment: .leading, spacing: 12) {
@@ -224,6 +203,22 @@ struct MediaCenterView: View {
             }
         }
         .background(panelBackground.ignoresSafeArea())
+        
+        // FIXED: Replaced old hardcoded titles with a modern native inline title configuration
+        .navigationTitle("Media Center")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+            #endif
+        }
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [UTType.audio, UTType.mp3],
@@ -232,11 +227,7 @@ struct MediaCenterView: View {
             switch result {
             case .success(let urls):
                 guard let selectedURL = urls.first else { return }
-                
-                // 1. Process physical disk import allocation
                 if let fileInfo = LocalStorageManager.shared.copyAudioToSandbox(from: selectedURL) {
-                    
-                    // 2. Prevent duplicate entities if this metadata tracking record already exists
                     let alreadyRegistered = coreDataUploadedTracks.contains { $0.fileName == fileInfo.fileName }
                     
                     if !alreadyRegistered {
@@ -246,7 +237,6 @@ struct MediaCenterView: View {
                         newTrack.fileName = fileInfo.fileName
                         newTrack.dateAdded = Date()
                         
-                        // Commit record parameters to core data and sync channels
                         do {
                             try viewContext.save()
                         } catch {
@@ -254,7 +244,6 @@ struct MediaCenterView: View {
                         }
                     }
                     
-                    // 3. Play item automatically
                     settings.selectedTrack = fileInfo.fileName
                     if audioManager.isPlaying {
                         audioManager.play(trackName: fileInfo.fileName, using: settings)
@@ -316,7 +305,6 @@ struct MediaCenterView: View {
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
         .onTapGesture {
-            // Block loading actions if the underlying track asset hasn't synchronized locally yet
             if isCustom && !LocalStorageManager.shared.fileExistsInSandbox(fileName: identifier) {
                 return
             }
@@ -332,11 +320,7 @@ struct MediaCenterView: View {
             audioManager.stop()
             settings.selectedTrack = "Chrome_On_The_Curb"
         }
-        
-        // 1. Wipe out physical container allocation file from disk
         LocalStorageManager.shared.deletePhysicalFile(fileName: fileName)
-        
-        // 2. Remove row entity from Core Data contextual stack framework
         viewContext.delete(entity)
         
         do {

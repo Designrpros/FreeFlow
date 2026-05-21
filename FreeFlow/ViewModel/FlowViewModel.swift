@@ -29,7 +29,6 @@ final class FlowViewModel: ObservableObject {
 
     /// Handles shuffling/fetching states smoothly depending on whether the source is local or network-reliant
     func refresh(using settings: FlowSettings) {
-        // FIXED: The API is active whenever Datamuse API is selected as the Word Source
         let isUsingAPI = (settings.wordSource == .datamuseAPI)
         
         if isUsingAPI {
@@ -40,18 +39,22 @@ final class FlowViewModel: ObservableObject {
                 let fetchedWords: [String]
                 
                 if settings.freestyleMode == .wordFlowPlusRhymes {
-                    // 1. Focus Word API Mode -> Strict Rhymes from Datamuse
-                    let anchor = settings.customFocusWord.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty ? nil : settings.customFocusWord
+                    // FIXED: Only treat the custom text field as an anchor if Manual mode is active and it's not empty
+                    let anchor: String?
+                    if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        anchor = settings.customFocusWord
+                    } else {
+                        anchor = nil
+                    }
+                    
                     fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
                     
-                    // Synchronize anchor text back to settings if a random one was generated
-                    if anchor == nil, let firstWord = fetchedWords.first {
+                    // FIXED: Only fill the text field automatically if the user explicitly wants manual control active
+                    if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
                     }
                 } else {
                     // 2. Standard Keywords API Mode -> Use Datamuse for random/related streams
-                    // Fallback to random local words if you prefer standard mode completely local,
-                    // or pass a default string to pull unique variations from Datamuse.
                     fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: nil)
                 }
                 
@@ -63,12 +66,19 @@ final class FlowViewModel: ObservableObject {
             isLoading = false
             
             if settings.freestyleMode == .wordFlowPlusRhymes {
-                // Focus Word local mode (pulls entirely from your offline RhymesDatabase)
-                let anchor = settings.customFocusWord.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty ? nil : settings.customFocusWord
+                // FIXED: Only evaluate local text targets if Manual Mode is flipped on
+                let anchor: String?
+                if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    anchor = settings.customFocusWord
+                } else {
+                    anchor = nil
+                }
                 
                 Task {
                     let fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
-                    if anchor == nil, let firstWord = fetchedWords.first {
+                    
+                    // FIXED: Prevent the engine from sticky-locking your text input in automated modes
+                    if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
                     }
                     self.words = fetchedWords

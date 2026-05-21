@@ -104,7 +104,7 @@ struct FlowView: View {
             Spacer()
             
             // Interactive Media Control Studio Footer Module
-            VStack(spacing: 16) {
+            VStack(spacing: 24) {
                 HStack(spacing: 40) {
                     // BACKWARD TRACK CONTROL BUTTON
                     Button {
@@ -116,18 +116,10 @@ struct FlowView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    // CENTRAL PULSING WAVEFORM CONTAINER
+                    // UPDATED ACTIVE ELEMENT: Central Live Recording Waveform Canvas
                     VStack(spacing: 0) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 48, weight: audioManager.isPlaying ? .semibold : .regular))
-                            .foregroundColor(audioManager.isPlaying ? .blue : contentColor.opacity(0.4))
-                            .scaleEffect(audioManager.isPlaying ? 1.15 : 1.0)
-                            .animation(
-                                audioManager.isPlaying ? .easeInOut(duration: 0.3).repeatForever(autoreverses: true) : .easeInOut(duration: 0.2),
-                                value: audioManager.isPlaying
-                            )
+                        LiveAudioWaveformView()
                     }
-                    .frame(width: 80, height: 60)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         if audioManager.isPlaying {
@@ -149,30 +141,37 @@ struct FlowView: View {
                 }
                 
                 // CONTROL INSTRUCTIONS & PERFORMANCE STATUS STRIP
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     Text(audioManager.isPlaying ? "Tap words to shuffle • Tap waveform to stop" : "Tap words to shuffle • Tap waveform to play")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(audioManager.isPlaying ? .blue.opacity(0.8) : contentColor.opacity(0.4))
                     
-                    Text(audioManager.isPlaying ? "Track: \(audioManager.activeTrackTitle)" : "Selected Track: \(settings.selectedTrack)")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(contentColor.opacity(0.3))
+                    VStack(spacing: 2) {
+                        Text(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(contentColor)
+                        
+                        Text("Studio Production Asset")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(contentColor.opacity(0.4))
+                    }
+                    .padding(.top, 4)
                 }
             }
             .padding(.bottom, 48)
-        }
+        }        
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { vm.ensureInitialized(using: settings) }
         
-        // Listens to stepper count modifications and updates layout instantly
-        .onChange(of: settings.numberOfWords) { _ in
+        // FIXED: Modernized onChange parameter signatures for iOS 17+ compliance
+        .onChange(of: settings.numberOfWords) { oldValue, newValue in
             vm.refresh(using: settings)
         }
-        // Monitors side-panel inspector style selections to instantly load the proper engine
-        .onChange(of: settings.freestyleMode) { _ in
+        
+        .onChange(of: settings.freestyleMode) { oldValue, newValue in
             vm.refresh(using: settings)
         }
-        // FIXED: Compares against String rawValue definition to eliminate system namespace collision with .automatic
+        
         .onReceive(automaticTimer) { _ in
             guard settings.refreshStyle.rawValue == "Automatic" else { return }
             vm.refresh(using: settings)

@@ -35,6 +35,7 @@ struct PersistenceController {
     let container: NSPersistentCloudKitContainer
 
     init(inMemory: Bool = false) {
+        // MATCHES Blueprints: Targets your explicit local main 'FreeFlow.xcdatamodeld' file capitalizations
         container = NSPersistentCloudKitContainer(name: "FreeFlow")
         
         guard let description = container.persistentStoreDescriptions.first else {
@@ -42,9 +43,10 @@ struct PersistenceController {
         }
         
         if !inMemory {
-            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.FreeFlow")
+            // FIXED: Matches your lowercase server identifier container to clear the 1014 BadContainer fault
+            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.freeflow")
             
-            // FIXED: Swapped out the old scope constants for their explicit string keys to clear compiler errors
+            // Re-enabling explicit history tracking options to monitor background data merges across devices
             description.setOption(true as NSNumber, forKey: "NSPersistentStoreRemoteChangeNotificationOptionKey")
             description.setOption(true as NSNumber, forKey: "NSPersistentHistoryTrackingKey")
         } else {

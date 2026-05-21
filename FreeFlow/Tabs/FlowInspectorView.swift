@@ -82,7 +82,7 @@ struct FlowInspectorView: View {
                     .cornerRadius(8)
                 }
 
-                // UPDATED ACTIVE SECTION: FOCUS WORD MONITOR CONTROL
+                // FIXED SECTION: SMART FOCUS WORD MONITOR CONTROL
                 if settings.freestyleMode == .wordFlowPlusRhymes {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Focus Word Control")
@@ -90,41 +90,77 @@ struct FlowInspectorView: View {
                             .foregroundColor(secondaryTextColor)
                         
                         VStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text("Anchor Word Target")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(secondaryTextColor)
-                                    Spacer()
-                                    if !settings.customFocusWord.isEmpty {
-                                        Button("Clear") {
+                            // Master toggle controls manual overrides vs fully automated generation
+                            HStack {
+                                Label("Manual Anchor Word", systemImage: "pin.circle.fill")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(mainTextColor)
+                                Spacer()
+                                Toggle("", isOn: $settings.useManualAnchor)
+                                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                                    .labelsHidden()
+                                    .onChange(of: settings.useManualAnchor) { oldValue, newValue in
+                                        // Unblocks the auto-engine instantly if the user disables manual targets
+                                        if !newValue {
                                             settings.customFocusWord = ""
                                         }
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.red.opacity(0.8))
                                     }
+                            }
+                            
+                            if settings.useManualAnchor {
+                                Divider().background(lineSeparatorColor)
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text("Anchor Word Target")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(secondaryTextColor)
+                                        Spacer()
+                                        if !settings.customFocusWord.isEmpty {
+                                            Button("Clear") {
+                                                settings.customFocusWord = ""
+                                            }
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(.red.opacity(0.8))
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    
+                                    TextField("Type target word (e.g., Flame)...", text: $settings.customFocusWord)
+                                        .textFieldStyle(.plain)
+                                        .padding(10)
+                                        .background(colorScheme == .dark ? Color.black.opacity(0.2) : Color.white)
+                                        .cornerRadius(6)
+                                        .foregroundColor(mainTextColor)
+                                        .font(.system(size: 13, design: .monospaced))
+                                        .disableAutocorrection(true)
+                                    
+                                    Text("The engine will stick to this word until modified or cleared.")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(secondaryTextColor.opacity(0.8))
+                                        .padding(.top, 2)
                                 }
+                                .transition(.asymmetric(insertion: .push(from: .top).combined(with: .opacity), removal: .opacity))
+                            } else {
+                                Divider().background(lineSeparatorColor)
                                 
-                                // Interactive TextField directly modifying focus calculations
-                                TextField("Type target word (e.g., Flame)...", text: $settings.customFocusWord)
-                                    .textFieldStyle(.plain)
-                                    .padding(10)
-                                    .background(colorScheme == .dark ? Color.black.opacity(0.2) : Color.white)
-                                    .cornerRadius(6)
-                                    .foregroundColor(mainTextColor)
-                                    .font(.system(size: 13, design: .monospaced))
-                                    .disableAutocorrection(true)
-                                
-                                Text("Leave field blank to let the engine pick a random anchor automatically on tap.")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    .padding(.top, 2)
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.blue)
+                                    Text("Engine is automatically generating random anchors on tap.")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(secondaryTextColor)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 2)
                             }
                         }
                         .padding()
                         .background(cardBackground)
                         .cornerRadius(8)
                     }
+                    .animation(.easeInOut(duration: 0.2), value: settings.useManualAnchor)
                 }
 
                 // SECTION 1: WORD GENERATION OPTIONS
@@ -157,7 +193,6 @@ struct FlowInspectorView: View {
                             .labelsHidden()
                         }
                         
-                        // FIXED: Uses rawValue matching to bypass SDK global namespace collision with .automatic entirely
                         if settings.refreshStyle.rawValue == "Automatic" {
                             Divider().background(lineSeparatorColor)
                             
@@ -363,7 +398,6 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // UPDATED STRUCTURAL TOGGLE WITH EXPLICIT ICON AND ALIGNMENT SPACER
                             HStack(alignment: .center, spacing: 12) {
                                 Image(systemName: "lock.slash")
                                     .font(.system(size: 14, weight: .medium))
@@ -403,7 +437,6 @@ struct FlowInspectorView: View {
         .background(panelBackground)
     }
     
-    // UPDATED VIEWBUILDER: Resolves titles and file tracking definitions through Core Data references
     @ViewBuilder
     private func inspectorTrackRow(title: String, identifier: String, isCustom: Bool) -> some View {
         let isSelected = settings.selectedTrack == identifier
@@ -440,7 +473,6 @@ struct FlowInspectorView: View {
         .padding()
         .contentShape(Rectangle())
         .onTapGesture {
-            // Guard clause to protect playback systems from trying to load un-downloaded cloud nodes
             if isCustom && !LocalStorageManager.shared.fileExistsInSandbox(fileName: identifier) {
                 return
             }

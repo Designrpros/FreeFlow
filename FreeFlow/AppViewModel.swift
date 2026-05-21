@@ -22,6 +22,8 @@ final class AppViewModel: ObservableObject {
     private let kLoopWithCrossfade = "ff_loop_with_crossfade"
     private let kEndBehavior = "ff_end_behavior"
     private let kAppTheme = "ff_app_theme"
+    // FIXED: Appended storage key key token for the manual anchor switch flag state
+    private let kUseManualAnchor = "ff_use_manual_anchor"
 
     init() {
         // AppViewModel can remain an active global lifecycle hook if needed
@@ -65,6 +67,11 @@ final class AppViewModel: ObservableObject {
             settings.loopWithCrossfade = defaults.bool(forKey: kLoopWithCrossfade)
         }
         
+        // FIXED: Hydrates the new manual target switch state properly from disc references
+        if defaults.object(forKey: kUseManualAnchor) != nil {
+            settings.useManualAnchor = defaults.bool(forKey: kUseManualAnchor)
+        }
+        
         if let rawBehavior = defaults.string(forKey: kEndBehavior), let behavior = PlaybackEndBehavior(rawValue: rawBehavior) {
             settings.endBehavior = behavior
         }
@@ -85,6 +92,8 @@ final class AppViewModel: ObservableObject {
         defaults.set(settings.selectedTrack, forKey: kSelectedTrack)
         defaults.set(settings.preventScreenLock, forKey: kPreventScreenLock)
         defaults.set(settings.loopWithCrossfade, forKey: kLoopWithCrossfade)
+        // FIXED: Persists toggle positions continuously into disk slots on changes
+        defaults.set(settings.useManualAnchor, forKey: kUseManualAnchor)
         defaults.set(settings.endBehavior.rawValue, forKey: kEndBehavior)
         defaults.set(settings.appTheme.rawValue, forKey: kAppTheme)
     }
