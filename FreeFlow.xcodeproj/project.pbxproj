@@ -8,11 +8,41 @@
 
 /* Begin PBXBuildFile section */
 		AD023BA82FBF50970096AF08 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = AD023BA72FBF50970096AF08 /* README.md */; };
+		AD13E9972FC05046008FEE3E /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD13E9962FC05045008FEE3E /* WidgetKit.framework */; };
+		AD13E9992FC05046008FEE3E /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD13E9982FC05046008FEE3E /* SwiftUI.framework */; };
+		AD13E9A42FC05049008FEE3E /* FreeFlowWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD13E9942FC05045008FEE3E /* FreeFlowWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AD13E9A22FC05049008FEE3E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AD014A512FBDA3C50031DD16 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AD13E9932FC05045008FEE3E;
+			remoteInfo = FreeFlowWidgetsExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AD13E9A92FC05049008FEE3E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AD13E9A42FC05049008FEE3E /* FreeFlowWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AD014A592FBDA3C50031DD16 /* FreeFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FreeFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD023BA72FBF50970096AF08 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		AD13E9942FC05045008FEE3E /* FreeFlowWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FreeFlowWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AD13E9962FC05045008FEE3E /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		AD13E9982FC05046008FEE3E /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -23,6 +53,20 @@
 			);
 			target = AD014A582FBDA3C50031DD16 /* FreeFlow */;
 		};
+		AD13E9A82FC05049008FEE3E /* Exceptions for "FreeFlowWidgets" folder in "FreeFlowWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AD13E9932FC05045008FEE3E /* FreeFlowWidgetsExtension */;
+		};
+		AD13E9AD2FC051C3008FEE3E /* Exceptions for "FreeFlow" folder in "FreeFlowWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetDataManager.swift,
+			);
+			target = AD13E9932FC05045008FEE3E /* FreeFlowWidgetsExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -30,8 +74,17 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				AD023BA62FBF476B0096AF08 /* Exceptions for "FreeFlow" folder in "FreeFlow" target */,
+				AD13E9AD2FC051C3008FEE3E /* Exceptions for "FreeFlow" folder in "FreeFlowWidgetsExtension" target */,
 			);
 			path = FreeFlow;
+			sourceTree = "<group>";
+		};
+		AD13E99A2FC05046008FEE3E /* FreeFlowWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AD13E9A82FC05049008FEE3E /* Exceptions for "FreeFlowWidgets" folder in "FreeFlowWidgetsExtension" target */,
+			);
+			path = FreeFlowWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +97,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AD13E9912FC05045008FEE3E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD13E9992FC05046008FEE3E /* SwiftUI.framework in Frameworks */,
+				AD13E9972FC05046008FEE3E /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -52,6 +114,8 @@
 			children = (
 				AD023BA72FBF50970096AF08 /* README.md */,
 				AD014A5B2FBDA3C50031DD16 /* FreeFlow */,
+				AD13E99A2FC05046008FEE3E /* FreeFlowWidgets */,
+				AD13E9952FC05045008FEE3E /* Frameworks */,
 				AD014A5A2FBDA3C50031DD16 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -60,8 +124,18 @@
 			isa = PBXGroup;
 			children = (
 				AD014A592FBDA3C50031DD16 /* FreeFlow.app */,
+				AD13E9942FC05045008FEE3E /* FreeFlowWidgetsExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AD13E9952FC05045008FEE3E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				AD13E9962FC05045008FEE3E /* WidgetKit.framework */,
+				AD13E9982FC05046008FEE3E /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -74,10 +148,12 @@
 				AD014A552FBDA3C50031DD16 /* Sources */,
 				AD014A562FBDA3C50031DD16 /* Frameworks */,
 				AD014A572FBDA3C50031DD16 /* Resources */,
+				AD13E9A92FC05049008FEE3E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AD13E9A32FC05049008FEE3E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AD014A5B2FBDA3C50031DD16 /* FreeFlow */,
@@ -88,6 +164,28 @@
 			productName = FreeFlow;
 			productReference = AD014A592FBDA3C50031DD16 /* FreeFlow.app */;
 			productType = "com.apple.product-type.application";
+		};
+		AD13E9932FC05045008FEE3E /* FreeFlowWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AD13E9A52FC05049008FEE3E /* Build configuration list for PBXNativeTarget "FreeFlowWidgetsExtension" */;
+			buildPhases = (
+				AD13E9902FC05045008FEE3E /* Sources */,
+				AD13E9912FC05045008FEE3E /* Frameworks */,
+				AD13E9922FC05045008FEE3E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AD13E99A2FC05046008FEE3E /* FreeFlowWidgets */,
+			);
+			name = FreeFlowWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = FreeFlowWidgetsExtension;
+			productReference = AD13E9942FC05045008FEE3E /* FreeFlowWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -100,6 +198,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					AD014A582FBDA3C50031DD16 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					AD13E9932FC05045008FEE3E = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -119,6 +220,7 @@
 			projectRoot = "";
 			targets = (
 				AD014A582FBDA3C50031DD16 /* FreeFlow */,
+				AD13E9932FC05045008FEE3E /* FreeFlowWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -132,6 +234,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AD13E9922FC05045008FEE3E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -142,7 +251,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AD13E9902FC05045008FEE3E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AD13E9A32FC05049008FEE3E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AD13E9932FC05045008FEE3E /* FreeFlowWidgetsExtension */;
+			targetProxy = AD13E9A22FC05049008FEE3E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AD014A672FBDA3C80031DD16 /* Debug */ = {
@@ -377,6 +501,72 @@
 			};
 			name = Release;
 		};
+		AD13E9A62FC05049008FEE3E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8MCGWNL2HK;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FreeFlowWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FreeFlowWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Alcatelz.FreeFlow.FreeFlowWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AD13E9A72FC05049008FEE3E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8MCGWNL2HK;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FreeFlowWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FreeFlowWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Alcatelz.FreeFlow.FreeFlowWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -394,6 +584,15 @@
 			buildConfigurations = (
 				AD014A6A2FBDA3C80031DD16 /* Debug */,
 				AD014A6B2FBDA3C80031DD16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AD13E9A52FC05049008FEE3E /* Build configuration list for PBXNativeTarget "FreeFlowWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD13E9A62FC05049008FEE3E /* Debug */,
+				AD13E9A72FC05049008FEE3E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
