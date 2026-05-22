@@ -2,7 +2,7 @@
 //  FlowSettings.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 21/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import Combine
@@ -26,7 +26,6 @@ enum WordSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-// FIXED: Restored to standard system interface overrides
 enum AppTheme: String, CaseIterable, Identifiable {
     case system = "System"
     case light = "Light"
@@ -43,7 +42,6 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
-// FIXED: Created a distinct property layer managing background color signatures independently
 enum CanvasColor: String, CaseIterable, Identifiable {
     case defaultGray = "Default"
     case monochrome = "Monochrome"
@@ -101,7 +99,16 @@ final class FlowSettings: ObservableObject {
     @Published var wordSource: WordSource = .staticLibrary
 
     @Published var showAdvanced: Bool = false
-    @Published var appTheme: AppTheme = .system
+    
+    // FIXED: Appends a property observer to broadcast overrides to window instances instantly
+    @Published var appTheme: AppTheme = .system {
+        didSet {
+            DispatchQueue.main.async {
+                self.applyInterfaceThemeOverride()
+            }
+        }
+    }
+    
     @Published var canvasColor: CanvasColor = .defaultGray
     @Published var appAccent: AppAccent = .defaultBlue
     
@@ -128,6 +135,35 @@ final class FlowSettings: ObservableObject {
     @Published var isRecordingSession: Bool = false
     @Published var recordingDuration: TimeInterval = 0.0
     
+    // PRO AUDIO LAYOUT CONTROLS
+    @Published var playbackSpeed: Double = 1.0 {
+        didSet {
+            if playbackSpeed < 0.5 { playbackSpeed = 0.5 }
+            if playbackSpeed > 2.0 { playbackSpeed = 2.0 }
+        }
+    }
+    @Published var pitchShiftSemitones: Int = 0 {
+        didSet {
+            if pitchShiftSemitones < -12 { pitchShiftSemitones = -12 }
+            if pitchShiftSemitones > 12 { pitchShiftSemitones = 12 }
+        }
+    }
+    @Published var crossfadeDuration: Double = 1.0 {
+        didSet {
+            if crossfadeDuration < 0.1 { crossfadeDuration = 0.1 }
+            if crossfadeDuration > 5.0 { crossfadeDuration = 5.0 }
+        }
+    }
+    @Published var enableMicMonitor: Bool = false
+    
+    @Published var trackDownloadStates: [String: TrackDownloadState] = [:]
+
+    enum TrackDownloadState {
+        case idle
+        case downloading
+        case ready
+    }
+    
     let factoryTracks: [String] = [
         "Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch",
         "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"
@@ -140,6 +176,11 @@ final class FlowSettings: ObservableObject {
         refreshTracksRoster()
         appViewModel.loadSavedSettings(into: self)
         
+        // FIXED: Re-verify system interface matching on initial startup configuration load
+        DispatchQueue.main.async {
+            self.applyInterfaceThemeOverride()
+        }
+        
         self.objectWillChange
             .sink { [weak self] _ in
                 guard let self = self else { return }
@@ -151,29 +192,126 @@ final class FlowSettings: ObservableObject {
     }
     
     func refreshTracksRoster() {
-        // 1. Start with your default built-in studio assets
-        var combinedTracks = factoryTracks
+        var updatedTracks = factoryTracks
         
-        // 2. Fetch all .m4a session recording files from the sandbox document directory
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let targetDirectory: URL
+        if let iCloudURL = FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents") {
+            targetDirectory = iCloudURL
+        } else {
+            targetDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        }
         
         do {
-            let fileURLs = try FileManager.default.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            if !FileManager.default.fileExists(atPath: targetDirectory.path) {
+                try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+            }
             
-            // Filter for your recording sessions or any other valid custom audio formats (.m4a, .mp3)
+            let fileURLs = try FileManager.default.contentsOfDirectory(at: targetDirectory, includingPropertiesForKeys: nil)
+            
             let customTracks = fileURLs
                 .filter { $0.pathExtension == "m4a" || $0.pathExtension == "mp3" }
-                .map { $0.lastPathComponent } // Keep the extension so resolveAudioURL can parse it cleanly
+                .map { $0.lastPathComponent }
                 .sorted()
             
-            combinedTracks.append(contentsOf: customTracks)
+            updatedTracks.append(contentsOf: customTracks)
+            
         } catch {
-            print("Failed to read sandboxed session files: \(error.localizedDescription)")
+            print("⚠️ [FlowSettings] Failed to scan disk container folder: \(error.localizedDescription)")
         }
         
-        // 3. Update the data stream on the main actor
         DispatchQueue.main.async {
-            self.availableTracks = combinedTracks
+            self.availableTracks = updatedTracks
         }
+    }
+
+    /// Robust, non-blocking asynchronous utility using system-native tracking to fetch cloud audio assets
+    func downloadCloudTrackOnDemand(_ filename: String) {
+        guard trackDownloadStates[filename] != .downloading else { return }
+        
+        print("🔊 [FlowSettings] Initiating native system download hook for cloud asset: \(filename)")
+        
+        DispatchQueue.main.async {
+            self.trackDownloadStates[filename] = .downloading
+        }
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
+            
+            let strippedName = filename.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+            let alternateURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: strippedName)
+            
+            let finalDownloadURL = FileManager.default.fileExists(atPath: alternateURL.path) ? alternateURL : targetURL
+            
+            try? FileManager.default.startDownloadingUbiquitousItem(at: finalDownloadURL)
+            
+            var downloadComplete = false
+            var attempts = 0
+            let maxAttempts = 120 // 60 seconds total maximum time allocation budget
+            
+            while !downloadComplete && attempts < maxAttempts {
+                if LocalStorageManager.shared.isLocalFileReady(fileName: filename) ||
+                   LocalStorageManager.shared.isLocalFileReady(fileName: strippedName) ||
+                   LocalStorageManager.shared.isLocalFileReady(fileName: finalDownloadURL.lastPathComponent) {
+                    downloadComplete = true
+                } else if let values = try? finalDownloadURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+                          values.ubiquitousItemDownloadingStatus == .current {
+                    downloadComplete = true
+                } else {
+                    attempts += 1
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+            }
+            
+            // FIXED: Isolate structural updates cleanly inside a main-thread boundary to prevent UI state freezups
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if downloadComplete {
+                        print("🔊 [FlowSettings] Native check success for [\(filename)]. Refreshing UI layouts...")
+                        self.trackDownloadStates[filename] = .ready
+                        
+                        // Safely trigger roster reconstruction on the main UI thread loop
+                        self.refreshTracksRoster()
+                        
+                        if self.selectedTrack == filename && !AudioManager.shared.isPlaying {
+                            AudioManager.shared.play(trackName: filename, using: self)
+                        }
+                    } else {
+                        print("⚠️ [FlowSettings] Native verification timed out or file mismatch occurred for name string: \(filename)")
+                        if FileManager.default.fileExists(atPath: finalDownloadURL.path) {
+                            self.trackDownloadStates[filename] = .ready
+                            self.refreshTracksRoster()
+                        } else {
+                            self.trackDownloadStates[filename] = .idle
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // FIXED: Multiplatform user interface layer renderer synchronization engine
+    private func applyInterfaceThemeOverride() {
+        #if os(iOS)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        for window in windowScene.windows {
+            switch appTheme {
+            case .system:
+                window.overrideUserInterfaceStyle = .unspecified
+            case .light:
+                window.overrideUserInterfaceStyle = .light
+            case .dark:
+                window.overrideUserInterfaceStyle = .dark
+            }
+        }
+        #elseif os(macOS)
+        switch appTheme {
+        case .system:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+        #endif
     }
 }

@@ -2,7 +2,7 @@
 //  LocalStorageManager.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 21/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import Foundation
@@ -13,10 +13,15 @@ struct LocalStorageManager {
     private init() {}
     
     private var documentsDirectory: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        if let iCloudURL = FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents") {
+            if !FileManager.default.fileExists(atPath: iCloudURL.path) {
+                try? FileManager.default.createDirectory(at: iCloudURL, withIntermediateDirectories: true)
+            }
+            return iCloudURL
+        }
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
-    /// Copies an external file into the local sandbox directory and returns the clean file details
     func copyAudioToSandbox(from sourceURL: URL) -> (title: String, fileName: String)? {
         let shouldRelease = sourceURL.startAccessingSecurityScopedResource()
         defer { if shouldRelease { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -25,7 +30,6 @@ struct LocalStorageManager {
         let destinationURL = documentsDirectory.appendingPathComponent(exactFileName)
         let cleanTitle = sourceURL.deletingPathExtension().lastPathComponent
         
-        // If file already exists, we return the names immediately without duplicate copies
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             return (cleanTitle, exactFileName)
         }
@@ -34,43 +38,86 @@ struct LocalStorageManager {
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
             return (cleanTitle, exactFileName)
         } catch {
-            print("Physical disk copy failure: \(error.localizedDescription)")
+            print("📂 [LocalStorageManager] Copy failure: \(error.localizedDescription)")
             return nil
         }
     }
     
-    /// Checks if a specific file name exists physically inside this device's storage
     func fileExistsInSandbox(fileName: String) -> Bool {
         let fileURL = documentsDirectory.appendingPathComponent(fileName)
-        return FileManager.default.fileExists(atPath: fileURL.path)
+        return isFilePresentAtURL(fileURL)
     }
     
-    /// Locates the real file path for either a factory asset or a custom documents folder file
+    func resolveAbsoluteLocalURL(for filename: String) -> URL {
+        return documentsDirectory.appendingPathComponent(filename)
+    }
+    
+    /// Checks for standard files as well as hidden iCloud download placeholders (.filename.m4a.icloud)
+    private func isFilePresentAtURL(_ url: URL) -> Bool {
+        if FileManager.default.fileExists(atPath: url.path) { return true }
+        
+        let directory = url.deletingLastPathComponent()
+        let hiddenCloudStubURL = directory.appendingPathComponent(".\(url.lastPathComponent).icloud")
+        return FileManager.default.fileExists(atPath: hiddenCloudStubURL.path)
+    }
+    
+    /// Verifies if a file exists locally with real byte contents, ignoring iCloud status delays
+    func isLocalFileReady(fileName: String) -> Bool {
+        let fileURL = documentsDirectory.appendingPathComponent(fileName)
+        
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+               let fileSize = attributes[.size] as? UInt64 {
+                return fileSize > 0
+            }
+            return true
+        }
+        return false
+    }
+    
+    /// Locates the real path and ensures un-downloaded cloud files are pulled down safely
+    /// without blocking CoreAudio threads or causing main pipeline freezes.
     func resolveAudioURL(for trackName: String) -> URL? {
-        // 1. First check if it's an uploaded file matching a complete fileName extension pattern
         let customURL = documentsDirectory.appendingPathComponent(trackName)
-        if FileManager.default.fileExists(atPath: customURL.path) {
-            return customURL
+        
+        if isFilePresentAtURL(customURL) {
+            // Check if the file is completely local and fully downloaded
+            if let values = try? customURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+               values.ubiquitousItemDownloadingStatus == .current && isLocalFileReady(fileName: trackName) {
+                return customURL
+            } else {
+                // FIXED: Trigger the underlying system download daemon but instantly return the URL pointer footprint.
+                // This lets your dedicated background worker task handle polling tracking safely.
+                print("📂 [LocalStorageManager] Triggering background iCloud download for track path: \(trackName)")
+                try? FileManager.default.startDownloadingUbiquitousItem(at: customURL)
+                return customURL
+            }
         }
         
-        // 2. Fallback check if it was stored without extension string details
-        let localFallbackURL = documentsDirectory.appendingPathComponent("\(trackName).mp3")
+        let needsExtension = !trackName.hasSuffix(".mp3") && !trackName.hasSuffix(".m4a")
+        let formattedName = needsExtension ? "\(trackName).mp3" : trackName
+        let localFallbackURL = documentsDirectory.appendingPathComponent(formattedName)
+        
         if FileManager.default.fileExists(atPath: localFallbackURL.path) {
             return localFallbackURL
         }
         
-        // 3. Fall back to factory resources bundled in the main app build compile
-        return Bundle.main.url(forResource: trackName, withExtension: "mp3")
+        let cleanBundleName = trackName.replacingOccurrences(of: ".m4a", with: "").replacingOccurrences(of: ".mp3", with: "")
+        return Bundle.main.url(forResource: cleanBundleName, withExtension: "mp3")
     }
     
-    /// Removes a custom file from the disk storage sandbox container
     func deletePhysicalFile(fileName: String) {
         let fileURL = documentsDirectory.appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            do {
-                try FileManager.default.removeItem(at: fileURL)
-            } catch {
-                print("Failed to delete physical custom audio file: \(error.localizedDescription)")
+        if isFilePresentAtURL(fileURL) {
+            let coordinator = NSFileCoordinator()
+            var coordinationError: NSError?
+            
+            coordinator.coordinate(writingItemAt: fileURL, options: .init(rawValue: 0), error: &coordinationError) { url in
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    print("⚠️ [LocalStorageManager] Failed to remove asset: \(error.localizedDescription)")
+                }
             }
         }
     }

@@ -2,45 +2,37 @@
 //  RecordingsView.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 21/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import SwiftUI
 import AVFoundation
 
 struct RecordingsView: View {
+    enum FileProcessingState {
+        case idle
+        case downloading
+        case ready(URL)
+    }
+
     @EnvironmentObject private var settings: FlowSettings
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var audioManager = AudioManager.shared
     
-    // Rename interaction states
+    @State private var fileStates: [String: FileProcessingState] = [:]
     @State private var showingRenameAlert = false
     @State private var trackToRename: String? = nil
     @State private var newTrackName = ""
     
     private var isDarkMode: Bool {
-        if settings.appTheme == .system {
-            return colorScheme == .dark
-        }
+        if settings.appTheme == .system { return colorScheme == .dark }
         return settings.appTheme == .dark
     }
     
-    private var workspaceBackground: Color {
-        settings.canvasColor.backgroundColor(isDark: isDarkMode)
-    }
-    
-    private var mainTextColor: Color {
-        isDarkMode ? .white : .black
-    }
-    
-    private var cardBackground: Color {
-        isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
-    }
-    
-    // Isolate recorded studio sessions (.m4a files)
-    private var recordedSessions: [String] {
-        settings.availableTracks.filter { $0.hasSuffix(".m4a") }
-    }
+    private var workspaceBackground: Color { settings.canvasColor.backgroundColor(isDark: isDarkMode) }
+    private var mainTextColor: Color { isDarkMode ? .white : .black }
+    private var cardBackground: Color { isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03) }
+    private var recordedSessions: [String] { settings.availableTracks.filter { $0.hasSuffix(".m4a") } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,28 +60,55 @@ struct RecordingsView: View {
                                     Text(cleanDisplayName(for: filename))
                                         .font(.system(size: 14, weight: .medium, design: .rounded))
                                         .foregroundColor(mainTextColor)
-                                    Text("Studio Session Asset • M4A")
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(mainTextColor.opacity(0.4))
+                                    
+                                    Group {
+                                        switch fileStates[filename] ?? .idle {
+                                        case .downloading:
+                                            Text("Downloading from iCloud Studio... • SYNCHRONIZING")
+                                                .foregroundColor(settings.appAccent.color)
+                                        case .ready:
+                                            Text("Studio Session Asset • READY TO EXPORT")
+                                                .foregroundColor(settings.appAccent.color.opacity(0.7))
+                                        case .idle:
+                                            Text("Studio Session Asset • AVAILABLE IN CLOUD")
+                                                .foregroundColor(mainTextColor.opacity(0.4))
+                                        }
+                                    }
+                                    .font(.system(size: 10, design: .monospaced))
                                 }
                                 
                                 Spacer()
                                 
                                 HStack(spacing: 16) {
-                                    // Native Cross-Platform Share/Download Link Engine
-                                    if let fileURL = resolveRecordingURL(for: filename) {
+                                    // iCloud Download / Share Action Core
+                                    switch fileStates[filename] ?? .idle {
+                                    case .downloading:
+                                        ProgressView()
+                                            .controlSize(.small)
+                                            .frame(width: 20, height: 20)
+                                            
+                                    case .ready(let fileURL):
                                         ShareLink(item: fileURL) {
-                                            Image(systemName: "square.and.arrow.down")
-                                                .font(.system(size: 16))
-                                                .foregroundColor(settings.appAccent.color.opacity(0.8))
+                                            Image(systemName: "square.and.arrow.up")
+                                                .font(.system(size: 15))
+                                                .foregroundColor(settings.appAccent.color)
                                         }
                                         .buttonStyle(.plain)
-                                        .help("Export/Download recording asset out of sandbox storage")
+                                        
+                                    case .idle:
+                                        Button {
+                                            evaluateAndPrepareFile(filename: filename, playImmediately: false)
+                                        } label: {
+                                            Image(systemName: "icloud.and.arrow.down")
+                                                .font(.system(size: 15))
+                                                .foregroundColor(secondaryTextColor)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                     
-                                    // Audio Playback Control
+                                    // TACTILE PLAY / STOP BUTTON CONTROLS (FIXED & FULLY FUNCTIONAL)
                                     Button {
-                                        togglePlayback(for: filename)
+                                        handlePlaybackTap(for: filename)
                                     } label: {
                                         Image(systemName: isCurrentTrackPlaying(filename) ? "stop.circle.fill" : "play.circle.fill")
                                             .font(.system(size: 22))
@@ -99,10 +118,9 @@ struct RecordingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            // --- NEW: Context Menu Support (Long Press / Right Click) ---
                             .contextMenu {
                                 Button {
-                                    togglePlayback(for: filename)
+                                    handlePlaybackTap(for: filename)
                                 } label: {
                                     Label(isCurrentTrackPlaying(filename) ? "Stop Playback" : "Play Session",
                                           systemImage: isCurrentTrackPlaying(filename) ? "stop.fill" : "play.fill")
@@ -114,7 +132,7 @@ struct RecordingsView: View {
                                     Label("Rename Session", systemImage: "pencil")
                                 }
                                 
-                                if let fileURL = resolveRecordingURL(for: filename) {
+                                if case .ready(let fileURL) = fileStates[filename] ?? .idle {
                                     ShareLink(item: fileURL) {
                                         Label("Export / Share", systemImage: "square.and.arrow.up")
                                     }
@@ -128,7 +146,6 @@ struct RecordingsView: View {
                                     Label("Delete Permanently", systemImage: "trash")
                                 }
                             }
-                            // --- Existing Swipe Gestures ---
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     deleteRecording(filename: filename)
@@ -143,6 +160,9 @@ struct RecordingsView: View {
                                     Label("Rename", systemImage: "pencil")
                                 }
                                 .tint(.orange)
+                            }
+                            .onAppear {
+                                checkInitialFileState(filename: filename)
                             }
                         }
                     } header: {
@@ -159,7 +179,6 @@ struct RecordingsView: View {
         .onAppear {
             settings.refreshTracksRoster()
         }
-        // Unified Modal Overlay handling secure transactional string modifications
         .alert("Rename Session Sheet", isPresented: $showingRenameAlert, presenting: trackToRename) { filename in
             TextField("Enter session description...", text: $newTrackName)
                 #if os(iOS)
@@ -177,33 +196,90 @@ struct RecordingsView: View {
         }
     }
     
-    // --- HELPER UTILITIES ---
+    // --- PROCESSING ENGINE ---
     
-    private func cleanDisplayName(for filename: String) -> String {
-        filename
-            .replacingOccurrences(of: "FreeFlow_Session_", with: "")
-            .replacingOccurrences(of: ".m4a", with: "")
-    }
-    
-    private func isCurrentTrackPlaying(_ filename: String) -> Bool {
-        audioManager.isPlaying && audioManager.activeTrackTitle == filename
-    }
-    
-    private func togglePlayback(for filename: String) {
-        if isCurrentTrackPlaying(filename) {
-            audioManager.stop()
+    private func checkInitialFileState(filename: String) {
+        if LocalStorageManager.shared.isLocalFileReady(fileName: filename) {
+            let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
+            fileStates[filename] = .ready(targetURL)
+            return
+        }
+        
+        let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
+        if let values = try? targetURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+           values.ubiquitousItemDownloadingStatus == .current {
+            fileStates[filename] = .ready(targetURL)
         } else {
-            audioManager.play(trackName: filename, using: settings)
+            fileStates[filename] = .idle
         }
     }
     
-    private func resolveRecordingURL(for filename: String) -> URL? {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let fileURL = documentsDirectory.appendingPathComponent(filename)
-        return FileManager.default.fileExists(atPath: fileURL.path) ? fileURL : nil
+    private func handlePlaybackTap(for filename: String) {
+        if isCurrentTrackPlaying(filename) {
+            audioManager.stop()
+            return
+        }
+        
+        // Dynamic Verification: Ensure track bytes exist locally prior to hardware engine feed
+        if case .ready = fileStates[filename] {
+            audioManager.play(trackName: filename, using: settings)
+        } else {
+            // Automatically switch row to downloading, pull the asset, and engage playback immediately upon delivery
+            evaluateAndPrepareFile(filename: filename, playImmediately: true)
+        }
     }
     
-    // --- STORAGE OPERATION RUNLOOPS ---
+    private func evaluateAndPrepareFile(filename: String, playImmediately: Bool) {
+        fileStates[filename] = .downloading
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
+            
+            // Command operating system daemon to cache local stream fragments
+            try? FileManager.default.startDownloadingUbiquitousItem(at: targetURL)
+            
+            var downloadComplete = false
+            var attempts = 0
+            let maxAttempts = 120 // 60 seconds safe timeout ceiling check pass
+            
+            while !downloadComplete && attempts < maxAttempts {
+                if LocalStorageManager.shared.isLocalFileReady(fileName: filename) {
+                    downloadComplete = true
+                } else if let values = try? targetURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+                          values.ubiquitousItemDownloadingStatus == .current {
+                    downloadComplete = true
+                } else {
+                    attempts += 1
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if downloadComplete {
+                        self.fileStates[filename] = .ready(targetURL)
+                        if playImmediately {
+                            self.audioManager.play(trackName: filename, using: self.settings)
+                        }
+                    } else {
+                        // Fallback verification override: Check physical disk asset frames one last time
+                        if FileManager.default.fileExists(atPath: targetURL.path) {
+                            self.fileStates[filename] = .ready(targetURL)
+                            if playImmediately {
+                                self.audioManager.play(trackName: filename, using: self.settings)
+                            }
+                        } else {
+                            self.fileStates[filename] = .idle
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private var secondaryTextColor: Color { isDarkMode ? .white.opacity(0.4) : .black.opacity(0.5) }
+    private func cleanDisplayName(for filename: String) -> String { filename.replacingOccurrences(of: "FreeFlow_Session_", with: "").replacingOccurrences(of: ".m4a", with: "") }
+    private func isCurrentTrackPlaying(_ filename: String) -> Bool { audioManager.isPlaying && audioManager.activeTrackTitle == filename }
     
     private func initiateRename(for filename: String) {
         trackToRename = filename
@@ -215,28 +291,29 @@ struct RecordingsView: View {
         let cleanedInput = newDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedInput.isEmpty else { return }
         
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let originalURL = documentsDirectory.appendingPathComponent(oldFilename)
-        
+        let originalURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: oldFilename)
         let targetFilename = "FreeFlow_Session_\(cleanedInput).m4a"
-        let destinationURL = documentsDirectory.appendingPathComponent(targetFilename)
+        let destinationURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: targetFilename)
         
         guard originalURL != destinationURL else { return }
         
-        if isCurrentTrackPlaying(oldFilename) {
-            audioManager.stop()
-        }
+        if isCurrentTrackPlaying(oldFilename) { audioManager.stop() }
         
         do {
             try FileManager.default.moveItem(at: originalURL, to: destinationURL)
             
-            if settings.selectedTrack == oldFilename {
-                settings.selectedTrack = targetFilename
+            let oldState = fileStates[oldFilename]
+            fileStates[oldFilename] = nil
+            if case .ready = oldState {
+                fileStates[targetFilename] = .ready(destinationURL)
+            } else {
+                checkInitialFileState(filename: targetFilename)
             }
             
+            if settings.selectedTrack == oldFilename { settings.selectedTrack = targetFilename }
             settings.refreshTracksRoster()
         } catch {
-            print("Physical disk move file transaction failed: \(error.localizedDescription)")
+            print("⚠️ [RecordingsView] Physical disk move file transaction failed: \(error.localizedDescription)")
         }
         
         trackToRename = nil
@@ -244,9 +321,8 @@ struct RecordingsView: View {
     }
     
     private func deleteRecording(filename: String) {
-        if isCurrentTrackPlaying(filename) {
-            audioManager.stop()
-        }
+        if isCurrentTrackPlaying(filename) { audioManager.stop() }
+        fileStates[filename] = nil
         LocalStorageManager.shared.deletePhysicalFile(fileName: filename)
         settings.refreshTracksRoster()
     }

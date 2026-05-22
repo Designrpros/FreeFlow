@@ -2,7 +2,7 @@
 //  FlowInspectorView.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 21/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import SwiftUI
@@ -24,35 +24,16 @@ struct FlowInspectorView: View {
     private var coreDataUploadedTracks: FetchedResults<UploadedTrackEntity>
 
     private var isDarkMode: Bool {
-        if settings.appTheme == .system {
-            return colorScheme == .dark
-        }
+        if settings.appTheme == .system { return colorScheme == .dark }
         return settings.appTheme == .dark
     }
 
-    private var panelBackground: Color {
-        settings.canvasColor.backgroundColor(isDark: isDarkMode)
-    }
-    
-    private var cardBackground: Color {
-        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
-    }
-    
-    private var mainTextColor: Color {
-        isDarkMode ? .white : .black
-    }
-    
-    private var secondaryTextColor: Color {
-        isDarkMode ? .white.opacity(0.4) : .black.opacity(0.5)
-    }
-    
-    private var lineSeparatorColor: Color {
-        isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.06)
-    }
-    
-    private var factoryTracks: [String] {
-        settings.factoryTracks
-    }
+    private var panelBackground: Color { settings.canvasColor.backgroundColor(isDark: isDarkMode) }
+    private var cardBackground: Color { isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.04) }
+    private var mainTextColor: Color { isDarkMode ? .white : .black }
+    private var secondaryTextColor: Color { isDarkMode ? .white.opacity(0.4) : .black.opacity(0.5) }
+    private var lineSeparatorColor: Color { isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.06) }
+    private var factoryTracks: [String] { settings.factoryTracks }
 
     var body: some View {
         ScrollView {
@@ -75,9 +56,7 @@ struct FlowInspectorView: View {
                             }
                             .padding()
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                settings.freestyleMode = mode
-                            }
+                            .onTapGesture { settings.freestyleMode = mode }
                             
                             if mode != FreestyleMode.allCases.last {
                                 Divider().background(lineSeparatorColor)
@@ -105,9 +84,7 @@ struct FlowInspectorView: View {
                                     .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
                                     .labelsHidden()
                                     .onChange(of: settings.useManualAnchor) { oldValue, newValue in
-                                        if !newValue {
-                                            settings.customFocusWord = ""
-                                        }
+                                        if !newValue { settings.customFocusWord = "" }
                                     }
                             }
                             
@@ -121,12 +98,10 @@ struct FlowInspectorView: View {
                                             .foregroundColor(secondaryTextColor)
                                         Spacer()
                                         if !settings.customFocusWord.isEmpty {
-                                            Button("Clear") {
-                                                settings.customFocusWord = ""
-                                            }
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundColor(.red.opacity(0.8))
-                                            .buttonStyle(.plain)
+                                            Button("Clear") { settings.customFocusWord = "" }
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.red.opacity(0.8))
+                                                .buttonStyle(.plain)
                                         }
                                     }
                                     
@@ -237,9 +212,7 @@ struct FlowInspectorView: View {
                             }
                             .padding()
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                settings.wordSource = source
-                            }
+                            .onTapGesture { settings.wordSource = source }
                             
                             if source != WordSource.allCases.last {
                                 Divider().background(lineSeparatorColor)
@@ -258,9 +231,7 @@ struct FlowInspectorView: View {
                             .foregroundColor(secondaryTextColor)
                         
                         VStack(spacing: 0) {
-                            Button(action: {
-                                withAnimation { showUploadedTracks.toggle() }
-                            }) {
+                            Button(action: { withAnimation { showUploadedTracks.toggle() } }) {
                                 HStack {
                                     Image(systemName: "icloud.and.arrow.up")
                                     Text("My Uploaded Tracks")
@@ -309,11 +280,9 @@ struct FlowInspectorView: View {
                             .foregroundColor(secondaryTextColor)
                         
                         VStack(spacing: 0) {
-                            Button(action: {
-                                withAnimation { showStudioAssets.toggle() }
-                            }) {
+                            Button(action: { withAnimation { showStudioAssets.toggle() } }) {
                                 HStack {
-                                    Image(systemName: "music.note.list")
+                                    Image(systemName: "music.note.house")
                                     Text("Studio Assets")
                                     Spacer()
                                     Image(systemName: "chevron.right")
@@ -347,11 +316,7 @@ struct FlowInspectorView: View {
 
                 // SECTION 4: ADVANCED SETTINGS
                 VStack(spacing: 0) {
-                    Button(action: {
-                        withAnimation {
-                            settings.showAdvanced.toggle()
-                        }
-                    }) {
+                    Button(action: { withAnimation { settings.showAdvanced.toggle() } }) {
                         HStack {
                             Image(systemName: "wand.and.stars")
                             Text("Advanced Settings")
@@ -370,7 +335,6 @@ struct FlowInspectorView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Divider().background(lineSeparatorColor)
                             
-                            // 1. TRACK ENDING BEHAVIOR
                             HStack {
                                 Text("Track Ending Behavior")
                                     .font(.system(size: 13, weight: .medium))
@@ -387,7 +351,6 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // 2. APPEARANCE MODE (FIXED: Handles standard Light, Dark, System overrides)
                             HStack {
                                 Text("Appearance Theme")
                                     .font(.system(size: 13, weight: .medium))
@@ -404,7 +367,6 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // 3. CANVAS COLOR SELECTOR (FIXED: Houses your beautiful custom canvas options)
                             HStack {
                                 Text("Canvas Color")
                                     .font(.system(size: 13, weight: .medium))
@@ -421,7 +383,6 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // 4. ACCENT THEME
                             HStack {
                                 Text("Accent Theme")
                                     .font(.system(size: 13, weight: .medium))
@@ -438,7 +399,6 @@ struct FlowInspectorView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // 5. SCREEN LOCK TOGGLE
                             HStack(alignment: .center, spacing: 12) {
                                 Image(systemName: "lock.slash")
                                     .font(.system(size: 14, weight: .medium))
@@ -459,9 +419,7 @@ struct FlowInspectorView: View {
                                         settings.preventScreenLock = newValue
                                         ScreenLockManager.shared.setScreenLockPrevention(enabled: newValue)
                                     }
-                                )) {
-                                    Text("")
-                                }
+                                )) { Text("") }
                                 .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
                                 .labelsHidden()
                             }
@@ -472,28 +430,129 @@ struct FlowInspectorView: View {
                     }
                 }
                 .cornerRadius(8)
+                
+                // --- SECTION: ABOUT FREEFLOW STUDIO & CREDITS ---
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("About Studio")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(secondaryTextColor)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "waveform.and.mic")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(settings.appAccent.color)
+                            
+                            Text("FreeFlow Studio")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(mainTextColor)
+                            
+                            Spacer()
+                            
+                            Text("v1.0")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(mainTextColor.opacity(0.05))
+                                .cornerRadius(4)
+                        }
+                        
+                        Text("FreeFlow was crafted as a seamless tactical environment for fluid lyric engineering, streaming syllables, and capturing high-fidelity workspace takes without workflow interruption.")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(mainTextColor.opacity(0.7))
+                            .lineSpacing(3)
+                        
+                        Divider().background(lineSeparatorColor)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("STUDIO PRODUCTION CREDIT")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(secondaryTextColor)
+                            
+                            HStack(spacing: 6) {
+                                Image(systemName: "music.mic")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(settings.appAccent.color)
+                                Text("Instrumental studio assets produced by **Endrey at Studio 51**.")
+                                    .font(.system(size: 11, design: .rounded))
+                                    .foregroundColor(mainTextColor.opacity(0.8))
+                            }
+                        }
+                        .padding(.vertical, 2)
+                        
+                        Divider().background(lineSeparatorColor)
+                        
+                        Link(destination: URL(string: "https://buymeacoffee.com/Alcatelz")!) {
+                            HStack {
+                                Image(systemName: "cup.and.saucer.fill")
+                                    .font(.system(size: 12))
+                                Text("Buy Me a Coffee")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.85)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding()
+                    .background(cardBackground)
+                    .cornerRadius(8)
+                }
+                
             }
             .padding([.horizontal, .bottom])
         }
         .background(panelBackground)
     }
     
+    // FIXED: Upgraded layout checking to accurately identify hidden extension changes
     @ViewBuilder
     private func inspectorTrackRow(title: String, identifier: String, isCustom: Bool) -> some View {
         let isSelected = settings.selectedTrack == identifier
         
+        // FIXED: Try verifying custom tracking variants safely (literal name first, then suffix-stripped variants)
+        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+        let isLocalReady = !isCustom ||
+                           LocalStorageManager.shared.isLocalFileReady(fileName: identifier) ||
+                           LocalStorageManager.shared.isLocalFileReady(fileName: strippedName)
+                           
+        let currentDownloadState = settings.trackDownloadStates[identifier] ?? .idle
+        
         HStack {
-            Image(systemName: isCustom ? "icloud.and.arrow.up" : "music.note")
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor)
+            Group {
+                if !isLocalReady && currentDownloadState == .downloading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.7)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: isCustom ? "icloud.and.arrow.up" : "music.note")
+                        .font(.system(size: 12))
+                        .foregroundColor(isSelected ? settings.appAccent.color : secondaryTextColor)
+                }
+            }
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13))
                     .foregroundColor(mainTextColor)
                 
-                if isCustom && !LocalStorageManager.shared.fileExistsInSandbox(fileName: identifier) {
-                    Text("Waiting for iCloud download...")
+                if !isLocalReady {
+                    Text(currentDownloadState == .downloading ? "Downloading track..." : "Tap to download from iCloud")
                         .font(.system(size: 10))
                         .foregroundColor(.orange.opacity(0.8))
                 }
@@ -514,9 +573,11 @@ struct FlowInspectorView: View {
         .padding()
         .contentShape(Rectangle())
         .onTapGesture {
-            if isCustom && !LocalStorageManager.shared.fileExistsInSandbox(fileName: identifier) {
+            if !isLocalReady {
+                settings.downloadCloudTrackOnDemand(identifier)
                 return
             }
+            
             settings.selectedTrack = identifier
             if audioManager.isPlaying {
                 audioManager.play(trackName: identifier, using: settings)

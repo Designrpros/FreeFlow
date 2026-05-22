@@ -2,7 +2,7 @@
 //  ScreenLockManager.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 20/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import Foundation
@@ -17,7 +17,8 @@ final class ScreenLockManager {
     static let shared = ScreenLockManager()
     
     #if os(macOS)
-    private var assertionID: IOPMAssertionID = 0
+    private var displayAssertionID: IOPMAssertionID = 0
+    private var systemAssertionID: IOPMAssertionID = 0
     #endif
     
     private init() {}
@@ -37,17 +38,35 @@ final class ScreenLockManager {
             UIApplication.shared.isIdleTimerDisabled = true
         }
         #elseif os(macOS)
-        guard assertionID == 0 else { return }
-        let reasonForActivity = "FreeFlow practice session active" as CFString
-        let success = IOPMAssertionCreateWithName(
-            kIOPMAssertionTypeNoDisplaySleep as CFString,
-            IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            reasonForActivity,
-            &assertionID
-        )
-        if success != kIOReturnSuccess {
-            print("Failed to disable display sleep on macOS.")
-            assertionID = 0
+        let reasonForActivity = "FreeFlow practice studio session active" as CFString
+        
+        // 1. Core Window Display Sleep Assertion
+        if displayAssertionID == 0 {
+            let success = IOPMAssertionCreateWithName(
+                kIOPMAssertionTypeNoDisplaySleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                reasonForActivity,
+                &displayAssertionID
+            )
+            if success != kIOReturnSuccess {
+                print("Failed to disable display sleep on macOS.")
+                displayAssertionID = 0
+            }
+        }
+        
+        // 2. FIXED: Core System/CPU Idle Sleep Assertion
+        // Ensures backing audio file blocks keep streaming if the user locks their Mac screen via software or closes the laptop panel
+        if systemAssertionID == 0 {
+            let success = IOPMAssertionCreateWithName(
+                kIOPMAssertionTypeNoIdleSleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                reasonForActivity,
+                &systemAssertionID
+            )
+            if success != kIOReturnSuccess {
+                print("Failed to disable CPU idle system sleep on macOS.")
+                systemAssertionID = 0
+            }
         }
         #endif
     }
@@ -58,9 +77,17 @@ final class ScreenLockManager {
             UIApplication.shared.isIdleTimerDisabled = false
         }
         #elseif os(macOS)
-        guard assertionID != 0 else { return }
-        IOPMAssertionRelease(assertionID)
-        assertionID = 0
+        // Clean release of display assertions
+        if displayAssertionID != 0 {
+            IOPMAssertionRelease(displayAssertionID)
+            displayAssertionID = 0
+        }
+        
+        // Clean release of CPU background state sleep assertions
+        if systemAssertionID != 0 {
+            IOPMAssertionRelease(systemAssertionID)
+            systemAssertionID = 0
+        }
         #endif
     }
 }

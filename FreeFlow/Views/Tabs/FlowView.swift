@@ -2,7 +2,7 @@
 //  FlowView.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 21/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import SwiftUI
@@ -19,15 +19,11 @@ struct FlowView: View {
     }
 
     private var isDarkMode: Bool {
-        if settings.appTheme == .system {
-            return colorScheme == .dark
-        }
+        if settings.appTheme == .system { return colorScheme == .dark }
         return settings.appTheme == .dark
     }
 
-    private var contentColor: Color {
-        isDarkMode ? .white : .black
-    }
+    private var contentColor: Color { isDarkMode ? .white : .black }
 
     private var dynamicFontSize: CGFloat {
         switch settings.numberOfWords {
@@ -38,12 +34,18 @@ struct FlowView: View {
         }
     }
 
-    private var dynamicSpacing: CGFloat {
-        settings.numberOfWords > 4 ? 16 : 24
-    }
+    private var dynamicSpacing: CGFloat { settings.numberOfWords > 4 ? 16 : 24 }
 
     private var automaticTimer: Publishers.Autoconnect<Timer.TimerPublisher> {
         Timer.publish(every: settings.refreshInterval, on: .main, in: .common).autoconnect()
+    }
+
+    // Helper checking current dynamic track storage status
+    private var isCurrentTrackLocallyReady: Bool {
+        let currentTrackName = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
+        // Built-in assets are always ready
+        if settings.factoryTracks.contains(currentTrackName) { return true }
+        return LocalStorageManager.shared.isLocalFileReady(fileName: currentTrackName)
     }
 
     var body: some View {
@@ -111,17 +113,27 @@ struct FlowView: View {
                     
                     // Central Live Recording Waveform Canvas
                     VStack(spacing: 0) {
-                        LiveAudioWaveformView()
-                            // Sets the baseline idle color to gray, and dynamically transitions
-                            // to your selected Accent Theme color when the track is actively playing!
-                            .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
+                        if !isCurrentTrackLocallyReady && settings.trackDownloadStates[settings.selectedTrack] == .downloading {
+                            // Render a clean loading widget indicator during live streaming cloud download buffers
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: settings.appAccent.color))
+                                .frame(width: 48, height: 32)
+                        } else {
+                            LiveAudioWaveformView()
+                                .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
+                        }
                     }
+                    .frame(width: 60, height: 40)
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        let activeTrack = settings.selectedTrack
                         if audioManager.isPlaying {
                             audioManager.stop()
+                        } else if isCurrentTrackLocallyReady {
+                            audioManager.play(trackName: activeTrack, using: settings)
                         } else {
-                            audioManager.play(trackName: settings.selectedTrack, using: settings)
+                            // Automatically fire background fetching if the user taps play on an un-downloaded file
+                            settings.downloadCloudTrackOnDemand(activeTrack)
                         }
                     }
                     
@@ -136,16 +148,23 @@ struct FlowView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    Text(audioManager.isPlaying ? "Tap words to shuffle • Tap waveform to stop" : "Tap words to shuffle • Tap waveform to play")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(audioManager.isPlaying ? settings.appAccent.color.opacity(0.8) : contentColor.opacity(0.4))
+                    // Context text label updates dynamically depending on local file caching
+                    Group {
+                        if !isCurrentTrackLocallyReady {
+                            Text(settings.trackDownloadStates[settings.selectedTrack] == .downloading ? "Syncing iCloud instrumental buffers..." : "Instrumental offline • Tap waveform to download")
+                        } else {
+                            Text(audioManager.isPlaying ? "Tap words to shuffle • Tap waveform to stop" : "Tap words to shuffle • Tap waveform to play")
+                        }
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(audioManager.isPlaying || !isCurrentTrackLocallyReady ? settings.appAccent.color.opacity(0.8) : contentColor.opacity(0.4))
                     
                     VStack(spacing: 2) {
                         Text(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack)
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(contentColor)
                         
-                        Text("Studio Production Asset")
+                        Text(settings.factoryTracks.contains(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack) ? "Studio Production Asset" : "Custom Cloud Asset")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(contentColor.opacity(0.4))
                     }
@@ -184,7 +203,12 @@ struct FlowView: View {
         let nextTrackName = settings.availableTracks[newIndex]
         settings.selectedTrack = nextTrackName
         
-        if audioManager.isPlaying {
+        // Safety: If the user skips to an un-downloaded cloud song while a track is currently playing,
+        // stop the audio engine and fire the on-demand cloud fetch sequence safely.
+        if !settings.factoryTracks.contains(nextTrackName) && !LocalStorageManager.shared.isLocalFileReady(fileName: nextTrackName) {
+            audioManager.stop()
+            settings.downloadCloudTrackOnDemand(nextTrackName)
+        } else if audioManager.isPlaying {
             audioManager.play(trackName: nextTrackName, using: settings)
         }
     }

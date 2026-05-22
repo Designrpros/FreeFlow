@@ -58,8 +58,12 @@ struct PersistenceController {
                 fatalError("Unresolved Core Data / CloudKit compilation fault: \(error), \(error.userInfo)")
             }
         })
-        
+
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        // FIXED: Pin the query generation to the active transaction timeline tip
+        // This forces @FetchRequest to instantly redraw when CloudKit pushes background data merges!
+        try? container.viewContext.setQueryGenerationFrom(.current)
     }
 }
