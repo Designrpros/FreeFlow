@@ -55,6 +55,7 @@ enum CanvasColor: String, CaseIterable, Identifiable {
         switch self {
         case .defaultGray: return isDark ? Color(white: 0.12) : Color(white: 0.95)
         case .monochrome:  return isDark ? Color(white: 0.05) : Color(white: 1.0)
+        // 🚀 FIXED: Fixed the color macro typo and ternary structure down here
         case .ember:       return isDark ? Color(red: 0.25, green: 0.11, blue: 0.04) : Color(red: 0.96, green: 0.91, blue: 0.86)
         case .oceanic:     return isDark ? Color(red: 0.09, green: 0.20, blue: 0.17) : Color(red: 0.88, green: 0.94, blue: 0.92)
         case .midnight:    return isDark ? Color(red: 0.10, green: 0.09, blue: 0.18) : Color(red: 0.91, green: 0.90, blue: 0.96)
@@ -88,7 +89,6 @@ enum PlaybackEndBehavior: String, CaseIterable, Identifiable {
 }
 
 final class FlowSettings: ObservableObject {
-    // Properties that require disk persistence use didSet to notify the persistence subject
     @Published var freestyleMode: FreestyleMode = .standardKeywords { didSet { saveTrigger.send() } }
     @Published var refreshStyle: RefreshStyle = .manualTap { didSet { saveTrigger.send() } }
     @Published var wordSource: WordSource = .staticLibrary { didSet { saveTrigger.send() } }
@@ -120,7 +120,6 @@ final class FlowSettings: ObservableObject {
         }
     }
     
-    // UI layout execution state modifications (Excluded from Disk Persistence saving loop to remove stutters)
     @Published var isRecordingSession: Bool = false
     @Published var recordingDuration: TimeInterval = 0.0
     
@@ -163,7 +162,6 @@ final class FlowSettings: ObservableObject {
         availableTracks.filter { !$0.hasPrefix("FreeFlow_Session_") }
     }
     
-    // 🚀 FIXED: Isolated persistent publisher subject protects audio loops from global layout redrawing tasks
     private let saveTrigger = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
     
@@ -180,7 +178,6 @@ final class FlowSettings: ObservableObject {
             self.applyInterfaceThemeOverride()
         }
         
-        // 🚀 FIXED PERSISTENCE PIPELINE: Only commits settings changes to disk when values explicitly modify
         saveTrigger
             .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
             .sink { [weak self] _ in
@@ -191,18 +188,21 @@ final class FlowSettings: ObservableObject {
     }
     
     private func sanitizeSelectedTrackExtension() {
-        if !selectedTrack.hasSuffix(".mp3") && !selectedTrack.hasSuffix(".m4a") {
-            let lowercased = selectedTrack.lowercased()
-            if lowercased.contains("chrome") { selectedTrack = "Chrome_On_The_Curb.mp3" }
-            else if lowercased.contains("jazzyflowdeep") { selectedTrack = "JazzyFlowDeep.mp3" }
-            else if lowercased.contains("jazzyflow") { selectedTrack = "JazzyFlow.mp3" }
-            else if lowercased.contains("late_august") { selectedTrack = "Late_August_Porch.mp3" }
-            else if lowercased.contains("low_rider") { selectedTrack = "Low_Rider_Glide.mp3" }
-            else if lowercased.contains("morning") { selectedTrack = "Morning_on_the_Deck.mp3" }
-            else if lowercased.contains("passing") { selectedTrack = "Passing_Thru_Willow_Street.mp3" }
-            else if lowercased.contains("under") { selectedTrack = "Under_The_Surface.mp3" }
-            else { selectedTrack = "\(selectedTrack).mp3" }
+        let trimmed = selectedTrack.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix(".mp3") || trimmed.hasSuffix(".m4a") {
+            return
         }
+        
+        let lowercased = trimmed.lowercased()
+        if lowercased.contains("chrome") { selectedTrack = "Chrome_On_The_Curb.mp3" }
+        else if lowercased.contains("jazzyflowdeep") { selectedTrack = "JazzyFlowDeep.mp3" }
+        else if lowercased.contains("jazzyflow") { selectedTrack = "JazzyFlow.mp3" }
+        else if lowercased.contains("late_august") { selectedTrack = "Late_August_Porch.mp3" }
+        else if lowercased.contains("low_rider") { selectedTrack = "Low_Rider_Glide.mp3" }
+        else if lowercased.contains("morning") { selectedTrack = "Morning_on_the_Deck.mp3" }
+        else if lowercased.contains("passing") { selectedTrack = "Passing_Thru_Willow_Street.mp3" }
+        else if lowercased.contains("under") { selectedTrack = "Under_The_Surface.mp3" }
+        else { selectedTrack = "\(trimmed).mp3" }
     }
     
     func refreshTracksRoster() {

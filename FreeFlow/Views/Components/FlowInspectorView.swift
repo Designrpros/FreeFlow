@@ -16,6 +16,8 @@ struct FlowInspectorView: View {
 
     @State private var showUploadedTracks: Bool = true
     @State private var showStudioAssets: Bool = true
+    // Controls toggling state for the about summary card block
+    @State private var showAboutStudio: Bool = false
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \UploadedTrackEntity.dateAdded, ascending: true)],
@@ -232,7 +234,7 @@ struct FlowInspectorView: View {
                         
                         VStack(spacing: 0) {
                             Button(action: { withAnimation { showUploadedTracks.toggle() } }) {
-                                HStack {
+                                HStack { // 🚀 FIXED: Fixed typo (was rHStack)
                                     Image(systemName: "icloud.and.arrow.up")
                                     Text("My Uploaded Tracks")
                                     Spacer()
@@ -437,79 +439,103 @@ struct FlowInspectorView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(secondaryTextColor)
                     
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "waveform.and.mic")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(settings.appAccent.color)
-                            
-                            Text("FreeFlow Studio")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundColor(mainTextColor)
-                            
-                            Spacer()
-                            
-                            Text("v1.0")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(mainTextColor.opacity(0.05))
-                                .cornerRadius(4)
-                        }
-                        
-                        Text("FreeFlow was crafted as a seamless tactical environment for fluid lyric engineering, streaming syllables, and capturing high-fidelity workspace takes without workflow interruption.")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(mainTextColor.opacity(0.7))
-                            .lineSpacing(3)
-                        
-                        Divider().background(lineSeparatorColor)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("STUDIO PRODUCTION CREDIT")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(secondaryTextColor)
-                            
-                            HStack(spacing: 6) {
-                                Image(systemName: "music.mic")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(settings.appAccent.color)
-                                Text("Instrumental studio assets produced by **Endrey at Studio 51**.")
-                                    .font(.system(size: 11, design: .rounded))
-                                    .foregroundColor(mainTextColor.opacity(0.8))
-                            }
-                        }
-                        .padding(.vertical, 2)
-                        
-                        Divider().background(lineSeparatorColor)
-                        
-                        Link(destination: URL(string: "https://buymeacoffee.com/Alcatelz")!) {
+                    VStack(spacing: 0) {
+                        Button(action: { withAnimation { showAboutStudio.toggle() } }) {
                             HStack {
-                                Image(systemName: "cup.and.saucer.fill")
-                                    .font(.system(size: 12))
-                                Text("Buy Me a Coffee")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 14))
+                                Text("About FreeFlow Studio")
                                 Spacer()
-                                Image(systemName: "arrow.up.forward")
-                                    .font(.system(size: 10, weight: .bold))
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .rotationEffect(.degrees(showAboutStudio ? 90 : 0))
                             }
-                            .foregroundColor(.white)
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 12)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.85)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .cornerRadius(6)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(mainTextColor)
+                            .padding()
+                            .background(cardBackground)
                         }
                         .buttonStyle(.plain)
+                        
+                        if showAboutStudio {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Divider().background(lineSeparatorColor)
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "waveform.and.mic")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(settings.appAccent.color)
+                                    
+                                    Text("FreeFlow Studio")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundColor(mainTextColor)
+                                    
+                                    Spacer()
+                                    
+                                    Text("v1.0")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(secondaryTextColor)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(mainTextColor.opacity(0.05))
+                                        .cornerRadius(4)
+                                }
+                                
+                                Text("FreeFlow was crafted as a seamless tactical environment for fluid lyric engineering, streaming syllables, and capturing high-fidelity workspace takes without workflow interruption.")
+                                    .font(.system(size: 11, design: .rounded))
+                                    .foregroundColor(mainTextColor.opacity(0.7))
+                                    .lineSpacing(3)
+                                
+                                Divider().background(lineSeparatorColor)
+                                
+                                // 🚀 FIXED: Changed parameter label from 'where:' to 'alignment:'
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("STUDIO PRODUCTION CREDIT")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(secondaryTextColor)
+                                    
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "music.mic")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(settings.appAccent.color)
+                                        Text("Instrumental studio assets produced by **Endrey at Studio 51**.")
+                                            .font(.system(size: 11, design: .rounded))
+                                            .foregroundColor(mainTextColor.opacity(0.8))
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                                
+                                Divider().background(lineSeparatorColor)
+                                
+                                Link(destination: URL(string: "https://buymeacoffee.com/Alcatelz")!) {
+                                    HStack {
+                                        Image(systemName: "cup.and.saucer.fill")
+                                            .font(.system(size: 12))
+                                        Text("Buy Me a Coffee")
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                        Spacer()
+                                        Image(systemName: "arrow.up.forward")
+                                            .font(.system(size: 10, weight: .bold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 12)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [Color.orange, Color.orange.opacity(0.85)]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding([.horizontal, .bottom])
+                            .background(cardBackground)
+                        }
                     }
-                    .padding()
-                    .background(cardBackground)
                     .cornerRadius(8)
                 }
                 
@@ -523,8 +549,7 @@ struct FlowInspectorView: View {
     private func inspectorTrackRow(title: String, identifier: String, isCustom: Bool) -> some View {
         let isSelected = settings.selectedTrack == identifier
         
-        // FIXED: Verifies local file mapping status cleanly across extensions via our updated LocalStorageManager method
-        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
         let isLocalReady = !isCustom ||
                            LocalStorageManager.shared.isLocalFileReady(fileName: identifier) ||
                            LocalStorageManager.shared.isLocalFileReady(fileName: strippedName)

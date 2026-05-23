@@ -42,10 +42,9 @@ struct MediaCenterView: View {
     private var lineSeparatorColor: Color { isDarkMode ? Color.white.opacity(0.05) : Color.black.opacity(0.06) }
     
     private var factoryTracks: [String] {
-        settings.availableTracks.filter { settings.factoryTracks.contains($0) }
+        settings.factoryTracks
     }
 
-    // 🚀 FIXED: Changed from 'some Scene' back to 'some View' to satisfy protocol inheritance constraints safely
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -137,50 +136,9 @@ struct MediaCenterView: View {
                             
                             Divider().background(lineSeparatorColor)
                             
-                            // 4. CROSSFADE LOOP SETUP
-                            VStack(spacing: 10) {
-                                HStack(alignment: .center) {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(settings.appAccent.color)
-                                        .frame(width: 20, alignment: .leading)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Seamless Crossfade Loop")
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(mainTextColor)
-                                        Text("Blends track overlap seamlessly during cycle endpoints.")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(secondaryTextColor)
-                                    }
-                                    Spacer()
-                                    Toggle("", isOn: $settings.loopWithCrossfade)
-                                        .toggleStyle(SwitchToggleStyle(tint: settings.appAccent.color))
-                                        .labelsHidden()
-                                }
-                                
-                                if settings.loopWithCrossfade {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack {
-                                            Text("Crossfade Window Duration")
-                                                .font(.system(size: 11, weight: .medium))
-                                            Spacer()
-                                            Text(String(format: "%.1fs", settings.crossfadeDuration))
-                                                .font(.system(size: 11, design: .monospaced))
-                                                .foregroundColor(settings.appAccent.color)
-                                        }
-                                        Slider(value: $settings.crossfadeDuration, in: 0.1...5.0, step: 0.1)
-                                            .tint(settings.appAccent.color)
-                                    }
-                                    .padding(.leading, 26)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                                }
-                            }
-                            .animation(.easeInOut(duration: 0.2), value: settings.loopWithCrossfade)
+                            // 🚀 REMOVED: Crossover/Crossfade Toggle and Duration Slider removed entirely to keep audio sequencing fast and crash-free
                             
-                            Divider().background(lineSeparatorColor)
-                            
-                            // 5. TRACK ENDING BEHAVIOR
+                            // 4. TRACK ENDING BEHAVIOR
                             HStack {
                                 Text("Track Ending Behavior")
                                     .font(.system(size: 13, weight: .medium))
@@ -316,11 +274,11 @@ struct MediaCenterView: View {
     private func trackRow(title: String, identifier: String, isCustom: Bool, entityRef: UploadedTrackEntity?) -> some View {
         let isSelected = settings.selectedTrack == identifier
         
-        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
         let isLocalReady = !isCustom ||
                            LocalStorageManager.shared.isLocalFileReady(fileName: identifier) ||
                            LocalStorageManager.shared.isLocalFileReady(fileName: strippedName)
-                           
+                            
         let currentDownloadState = settings.trackDownloadStates[identifier] ?? .idle
         
         HStack {

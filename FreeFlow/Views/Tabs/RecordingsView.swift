@@ -32,7 +32,22 @@ struct RecordingsView: View {
     private var workspaceBackground: Color { settings.canvasColor.backgroundColor(isDark: isDarkMode) }
     private var mainTextColor: Color { isDarkMode ? .white : .black }
     private var cardBackground: Color { isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03) }
-    private var recordedSessions: [String] { settings.availableTracks.filter { $0.hasSuffix(".m4a") } }
+    
+    // Dynamic chronological resource sort maps latest file modifications to the top of the array stack
+    private var recordedSessions: [String] {
+        let files = settings.availableTracks.filter { $0.hasSuffix(".m4a") }
+        
+        return files.sorted { (file1, file2) -> Bool in
+            let url1 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file1)
+            let url2 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file2)
+            
+            let date1 = (try? url1.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
+            let date2 = (try? url2.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
+            
+            // Latest date bubble on top
+            return date1 > date2
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,6 +94,7 @@ struct RecordingsView: View {
                                 
                                 Spacer()
                                 
+                                // 🚀 FIXED: Double curly brackets removed completely
                                 HStack(spacing: 16) {
                                     switch fileStates[filename] ?? .idle {
                                     case .downloading:

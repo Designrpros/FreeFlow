@@ -39,10 +39,6 @@ struct FlowView: View {
 
     private var dynamicSpacing: CGFloat { settings.numberOfWords > 4 ? 16 : 24 }
 
-    private var automaticTimer: Publishers.Autoconnect<Timer.TimerPublisher> {
-        Timer.publish(every: settings.refreshInterval, on: .main, in: .common).autoconnect()
-    }
-
     private var isCurrentTrackLocallyReady: Bool {
         let currentTrackName = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
         
@@ -59,6 +55,14 @@ struct FlowView: View {
         
         if isFactoryAsset { return true }
         return LocalStorageManager.shared.isLocalFileReady(fileName: currentTrackName)
+    }
+
+    // 🚀 FIXED: Helper handles text mutations to dynamically strip file extensions before displaying the layout
+    private var cleanDisplayTrackTitle: String {
+        let rawTrack = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
+        return rawTrack.replacingOccurrences(of: ".mp3", with: "")
+                       .replacingOccurrences(of: ".m4a", with: "")
+                       .replacingOccurrences(of: "_", with: " ")
     }
 
     var body: some View {
@@ -135,10 +139,7 @@ struct FlowView: View {
                         in: 0.0...1.0,
                         onEditingChanged: { editing in
                             if !editing {
-                                // Commit position to hardware engine immediately
                                 audioManager.seekToProgressPercentage(localScrubValue)
-                                
-                                // Turn off tracking locks instantaneously once structural locks finish
                                 isScrubbing = false
                             }
                         }
@@ -220,7 +221,8 @@ struct FlowView: View {
                     .foregroundColor(audioManager.isPlaying || !isCurrentTrackLocallyReady ? settings.appAccent.color.opacity(0.8) : contentColor.opacity(0.4))
                     
                     VStack(spacing: 2) {
-                        Text(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack)
+                        // 🚀 FIXED: Displays clean display string without file extension types
+                        Text(cleanDisplayTrackTitle)
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(contentColor)
                         
@@ -235,6 +237,7 @@ struct FlowView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { vm.ensureInitialized(using: settings) }
+        .onDisappear { vm.terminateEcosystemEngine() }
         .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
         
         .onChange(of: settings.numberOfWords) { oldValue, newValue in
@@ -244,14 +247,8 @@ struct FlowView: View {
         .onChange(of: settings.freestyleMode) { oldValue, newValue in
             vm.refresh(using: settings)
         }
-        
-        .onReceive(automaticTimer) { _ in
-            guard settings.refreshStyle.rawValue == "Automatic" else { return }
-            vm.refresh(using: settings)
-        }
     }
     
-    // 🚀 FIXED: Point index mapping logic at instrumentalBackingTracks instead of raw availableTracks roster
     private var currentTrackIndex: Int {
         let currentTrackName = !audioManager.activeTrackTitle.isEmpty ? audioManager.activeTrackTitle : settings.selectedTrack
         let cleanCurrent = currentTrackName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
@@ -264,7 +261,6 @@ struct FlowView: View {
         return index ?? 0
     }
     
-    // 🚀 FIXED: Point linear navigation controls explicitly at instrumentalBackingTracks
     private func navigateTrack(forward: Bool) {
         let totalTracks = settings.instrumentalBackingTracks.count
         guard totalTracks > 0 else { return }

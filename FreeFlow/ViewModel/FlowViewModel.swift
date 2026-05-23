@@ -14,6 +14,10 @@ final class FlowViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     
     private let repo: WordsRepository
+    private var autoRefreshTask: Task<Void, Never>? = nil
+    
+    // Combine storage pointer to observe settings context continuously
+    private var settingsCancellables = Set<AnyCancellable>()
 
     /// Actor-isolated initializer safely handling dependency injection boundaries
     init(repo: WordsRepository? = nil) {
@@ -25,6 +29,26 @@ final class FlowViewModel: ObservableObject {
         if words.isEmpty {
             refresh(using: settings)
         }
+        
+        // 🚀 FIXED: Bind our auto-refresh engine explicitly to changes inside FlowSettings
+        observeSettingsEcosystem(settings)
+    }
+    
+    private func observeSettingsEcosystem(_ settings: FlowSettings) {
+        settingsCancellables.removeAll()
+        
+        // Listen to BOTH style updates and timing intervals simultaneously
+        Publishers.CombineLatest(settings.$refreshStyle, settings.$refreshInterval)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] style, interval in
+                guard let self = self else { return }
+                if style == .auto {
+                    self.startAutoRefreshEngine(interval: interval, settings: settings)
+                } else {
+                    self.terminateEcosystemEngine()
+                }
+            }
+            .store(in: &settingsCancellables)
     }
 
     /// Handles shuffling/fetching states smoothly depending on whether the source is local or network-reliant
@@ -32,7 +56,6 @@ final class FlowViewModel: ObservableObject {
         let isUsingAPI = (settings.wordSource == .datamuseAPI)
         
         if isUsingAPI {
-            // ONLINE API MODE: Engage the asynchronous workflow with loading indicators
             isLoading = true
             
             Task {
@@ -52,7 +75,6 @@ final class FlowViewModel: ObservableObject {
                         settings.customFocusWord = firstWord
                     }
                 } else {
-                    // Standard Keywords API Mode -> Use Datamuse for random/related streams
                     fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: nil)
                 }
                 
@@ -60,7 +82,6 @@ final class FlowViewModel: ObservableObject {
                 self.isLoading = false
             }
         } else {
-            // OFFLINE MODE (Static Library): Execute instantly with zero loading states or delayed async steps
             isLoading = false
             
             if settings.freestyleMode == .wordFlowPlusRhymes {
@@ -80,9 +101,30 @@ final class FlowViewModel: ObservableObject {
                     self.words = fetchedWords
                 }
             } else {
-                // Standard mode: Balanced syntax generator sequence pulls completely synchronously
                 self.words = repo.randomWords(count: settings.numberOfWords)
             }
         }
+    }
+    
+    // 🚀 FIXED: Background asynchronous loop decoupled completely from thread-blocked publishers
+    private func startAutoRefreshEngine(interval: Double, settings: FlowSettings) {
+        autoRefreshTask?.cancel()
+        
+        autoRefreshTask = Task {
+            while !Task.isCancelled {
+                let nanosecondsDelay = UInt64(interval * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanosecondsDelay)
+                
+                // Double check cancellation status before committing layout jumps
+                guard !Task.isCancelled else { break }
+                
+                self.refresh(using: settings)
+            }
+        }
+    }
+    
+    func terminateEcosystemEngine() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
     }
 }
