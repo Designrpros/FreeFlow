@@ -23,16 +23,27 @@ final class AppViewModel: ObservableObject {
     private let kEndBehavior = "ff_end_behavior"
     private let kAppTheme = "ff_app_theme"
     private let kUseManualAnchor = "ff_use_manual_anchor"
-    
-    // FIXED: Added local storage persistent tokens for the newly segregated components
     private let kCanvasColor = "ff_canvas_color"
     private let kAppAccent = "ff_app_accent"
 
-    init() {
-        // AppViewModel can remain an active global lifecycle hook if needed
+    init() {}
+    
+    // 🚀 NEW ECOSYSTEM INITIALIZATION MECHANISM: Pre-warms components while your splash displays
+    @MainActor
+    func prepareAppEcosystem(settings: FlowSettings) async {
+        // 1. Synchronously compile available tracks inside document rosters
+        settings.refreshTracksRoster()
+        
+        // 2. Load CoreData context to prevent disk access hitching on load
+        _ = PersistenceController.shared
+        
+        // 3. Keep splash active for 1.2 seconds so everything finishes configuring smoothly
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        
+        // 4. Dismiss splash screen and display the app
+        self.hasFinishedSplash = true
     }
     
-    /// Pulls saved values out of UserDefaults disk storage and applies them directly into your runtime configurations
     func loadSavedSettings(into settings: FlowSettings) {
         let defaults = UserDefaults.standard
         
@@ -50,7 +61,7 @@ final class AppViewModel: ObservableObject {
         if savedCount >= 1 && savedCount <= 6 {
             settings.numberOfWords = savedCount
         } else {
-            settings.numberOfWords = 4 // Baseline safe layout target default
+            settings.numberOfWords = 4
         }
         
         let savedInterval = defaults.double(forKey: kRefreshInterval)
@@ -62,14 +73,12 @@ final class AppViewModel: ObservableObject {
             settings.selectedTrack = savedTrack
         }
         
-        // Booleans fallback cleanly to false if unwritten, so we explicit check registration presence
         if defaults.object(forKey: kPreventScreenLock) != nil {
             settings.preventScreenLock = defaults.bool(forKey: kPreventScreenLock)
         }
         if defaults.object(forKey: kLoopWithCrossfade) != nil {
             settings.loopWithCrossfade = defaults.bool(forKey: kLoopWithCrossfade)
         }
-        
         if defaults.object(forKey: kUseManualAnchor) != nil {
             settings.useManualAnchor = defaults.bool(forKey: kUseManualAnchor)
         }
@@ -77,24 +86,17 @@ final class AppViewModel: ObservableObject {
         if let rawBehavior = defaults.string(forKey: kEndBehavior), let behavior = PlaybackEndBehavior(rawValue: rawBehavior) {
             settings.endBehavior = behavior
         }
-        
-        // FIXED: Appearance theme handles standard system light/dark settings dynamically
         if let rawTheme = defaults.string(forKey: kAppTheme), let theme = AppTheme(rawValue: rawTheme) {
             settings.appTheme = theme
         }
-        
-        // FIXED: De-serializes your custom canvas backgrounds natively
         if let rawCanvas = defaults.string(forKey: kCanvasColor), let canvas = CanvasColor(rawValue: rawCanvas) {
             settings.canvasColor = canvas
         }
-        
-        // FIXED: De-serializes your user interface highlights seamlessly
         if let rawAccent = defaults.string(forKey: kAppAccent), let accent = AppAccent(rawValue: rawAccent) {
             settings.appAccent = accent
         }
     }
     
-    /// Commits active user alterations directly down to the device disk space
     func saveSettings(from settings: FlowSettings) {
         let defaults = UserDefaults.standard
         
@@ -108,8 +110,6 @@ final class AppViewModel: ObservableObject {
         defaults.set(settings.loopWithCrossfade, forKey: kLoopWithCrossfade)
         defaults.set(settings.useManualAnchor, forKey: kUseManualAnchor)
         defaults.set(settings.endBehavior.rawValue, forKey: kEndBehavior)
-        
-        // FIXED: Persists all independent aesthetic custom choices safely onto the drive layers
         defaults.set(settings.appTheme.rawValue, forKey: kAppTheme)
         defaults.set(settings.canvasColor.rawValue, forKey: kCanvasColor)
         defaults.set(settings.appAccent.rawValue, forKey: kAppAccent)

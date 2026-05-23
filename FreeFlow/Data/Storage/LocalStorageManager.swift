@@ -2,7 +2,7 @@
 //  LocalStorageManager.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 22/05/2026.
+//  Created by Vegar Berentsen on 23/05/2026.
 //
 
 import Foundation
@@ -52,7 +52,6 @@ struct LocalStorageManager {
         return documentsDirectory.appendingPathComponent(filename)
     }
     
-    /// Checks for standard files as well as hidden iCloud download placeholders (.filename.m4a.icloud)
     private func isFilePresentAtURL(_ url: URL) -> Bool {
         if FileManager.default.fileExists(atPath: url.path) { return true }
         
@@ -61,10 +60,17 @@ struct LocalStorageManager {
         return FileManager.default.fileExists(atPath: hiddenCloudStubURL.path)
     }
     
-    /// Verifies if a file exists locally with real byte contents, ignoring iCloud status delays
+    // 🚀 FIXED INITIAL LOAD VERIFICATION: Fully checks clean filenames against nested subdirectories synchronously
     func isLocalFileReady(fileName: String) -> Bool {
-        let fileURL = documentsDirectory.appendingPathComponent(fileName)
+        let cleanName = fileName.replacingOccurrences(of: ".m4a", with: "").replacingOccurrences(of: ".mp3", with: "")
         
+        if Bundle.main.url(forResource: cleanName, withExtension: "mp3", subdirectory: "MP3") != nil ||
+           Bundle.main.url(forResource: cleanName, withExtension: "mp3") != nil ||
+           Bundle.main.url(forResource: cleanName, withExtension: "m4a") != nil {
+            return true
+        }
+        
+        let fileURL = documentsDirectory.appendingPathComponent(fileName)
         if FileManager.default.fileExists(atPath: fileURL.path) {
             if let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
                let fileSize = attributes[.size] as? UInt64 {
@@ -75,19 +81,14 @@ struct LocalStorageManager {
         return false
     }
     
-    /// Locates the real path and ensures un-downloaded cloud files are pulled down safely
-    /// without blocking CoreAudio threads or causing main pipeline freezes.
     func resolveAudioURL(for trackName: String) -> URL? {
         let customURL = documentsDirectory.appendingPathComponent(trackName)
         
         if isFilePresentAtURL(customURL) {
-            // Check if the file is completely local and fully downloaded
             if let values = try? customURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
                values.ubiquitousItemDownloadingStatus == .current && isLocalFileReady(fileName: trackName) {
                 return customURL
             } else {
-                // FIXED: Trigger the underlying system download daemon but instantly return the URL pointer footprint.
-                // This lets your dedicated background worker task handle polling tracking safely.
                 print("📂 [LocalStorageManager] Triggering background iCloud download for track path: \(trackName)")
                 try? FileManager.default.startDownloadingUbiquitousItem(at: customURL)
                 return customURL
@@ -103,6 +104,11 @@ struct LocalStorageManager {
         }
         
         let cleanBundleName = trackName.replacingOccurrences(of: ".m4a", with: "").replacingOccurrences(of: ".mp3", with: "")
+        
+        if let bundledURLInFolder = Bundle.main.url(forResource: cleanBundleName, withExtension: "mp3", subdirectory: "MP3") {
+            return bundledURLInFolder
+        }
+        
         return Bundle.main.url(forResource: cleanBundleName, withExtension: "mp3")
     }
     

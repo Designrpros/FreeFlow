@@ -14,6 +14,9 @@ struct FlowView: View {
     @StateObject private var audioManager = AudioManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
+    @State private var isScrubbing: Bool = false
+    @State private var localScrubValue: Double = 0.0
+
     init() {
         _vm = StateObject(wrappedValue: FlowViewModel())
     }
@@ -40,11 +43,21 @@ struct FlowView: View {
         Timer.publish(every: settings.refreshInterval, on: .main, in: .common).autoconnect()
     }
 
-    // Helper checking current dynamic track storage status
     private var isCurrentTrackLocallyReady: Bool {
         let currentTrackName = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
-        // Built-in assets are always ready
-        if settings.factoryTracks.contains(currentTrackName) { return true }
+        
+        let cleanCurrentName = currentTrackName.replacingOccurrences(of: ".mp3", with: "")
+                                              .replacingOccurrences(of: ".m4a", with: "")
+                                              .lowercased()
+        
+        let isFactoryAsset = settings.factoryTracks.contains { factoryTrack in
+            let cleanFactoryName = factoryTrack.replacingOccurrences(of: ".mp3", with: "")
+                                               .replacingOccurrences(of: ".m4a", with: "")
+                                               .lowercased()
+            return cleanFactoryName == cleanCurrentName
+        }
+        
+        if isFactoryAsset { return true }
         return LocalStorageManager.shared.isLocalFileReady(fileName: currentTrackName)
     }
 
@@ -74,20 +87,24 @@ struct FlowView: View {
                         
                         VStack(spacing: 12) {
                             ForEach(1..<min(vm.words.count, settings.numberOfWords), id: \.self) { index in
-                                Text(vm.words[index])
-                                    .font(.system(size: dynamicFontSize, weight: .medium, design: .rounded))
-                                    .foregroundColor(contentColor.opacity(0.7))
-                                    .lineLimit(1)
+                                if vm.words.indices.contains(index) {
+                                    Text(vm.words[index])
+                                        .font(.system(size: dynamicFontSize, weight: .medium, design: .rounded))
+                                        .foregroundColor(contentColor.opacity(0.7))
+                                        .lineLimit(1)
+                                }
                             }
                         }
                     } else {
                         VStack(spacing: dynamicSpacing) {
                             ForEach(0..<min(vm.words.count, settings.numberOfWords), id: \.self) { index in
-                                Text(vm.words[index])
-                                    .font(.system(size: dynamicFontSize, weight: .bold, design: .rounded))
-                                    .foregroundColor(contentColor)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
+                                if vm.words.indices.contains(index) {
+                                    Text(vm.words[index])
+                                        .font(.system(size: dynamicFontSize, weight: .bold, design: .rounded))
+                                        .foregroundColor(contentColor)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                }
                             }
                         }
                     }
@@ -100,6 +117,50 @@ struct FlowView: View {
             
             Spacer()
             
+            // TIMELINE TIMESTAMP PROGRESS CONTROL MODULE CARD
+            if audioManager.activeTrackDuration > 0 {
+                VStack(spacing: 4) {
+                    Slider(
+                        value: Binding(
+                            get: {
+                                if isScrubbing { return localScrubValue }
+                                guard audioManager.activeTrackDuration > 0 else { return 0.0 }
+                                return audioManager.currentProgressPosition / audioManager.activeTrackDuration
+                            },
+                            set: { newValue in
+                                if !isScrubbing { isScrubbing = true }
+                                localScrubValue = newValue
+                            }
+                        ),
+                        in: 0.0...1.0,
+                        onEditingChanged: { editing in
+                            if !editing {
+                                // Commit position to hardware engine immediately
+                                audioManager.seekToProgressPercentage(localScrubValue)
+                                
+                                // Turn off tracking locks instantaneously once structural locks finish
+                                isScrubbing = false
+                            }
+                        }
+                    )
+                    .tint(settings.appAccent.color)
+                    .controlSize(.small)
+                    .padding(.horizontal, 32)
+                    
+                    HStack {
+                        Text(formatTimeLabel(isScrubbing ? (localScrubValue * audioManager.activeTrackDuration) : audioManager.currentProgressPosition))
+                        Spacer()
+                        Text(formatTimeLabel(audioManager.activeTrackDuration))
+                    }
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(contentColor.opacity(0.4))
+                    .padding(.horizontal, 36)
+                }
+                .padding(.bottom, 12)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: audioManager.activeTrackDuration)
+            }
+            
             VStack(spacing: 24) {
                 HStack(spacing: 40) {
                     Button {
@@ -111,16 +172,17 @@ struct FlowView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    // Central Live Recording Waveform Canvas
                     VStack(spacing: 0) {
                         if !isCurrentTrackLocallyReady && settings.trackDownloadStates[settings.selectedTrack] == .downloading {
-                            // Render a clean loading widget indicator during live streaming cloud download buffers
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: settings.appAccent.color))
                                 .frame(width: 48, height: 32)
                         } else {
-                            LiveAudioWaveformView()
-                                .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
+                            LiveAudioWaveformView(
+                                isPlaying: audioManager.isPlaying,
+                                isSeeking: audioManager.isSeekingTimeline
+                            )
+                            .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
                         }
                     }
                     .frame(width: 60, height: 40)
@@ -132,7 +194,6 @@ struct FlowView: View {
                         } else if isCurrentTrackLocallyReady {
                             audioManager.play(trackName: activeTrack, using: settings)
                         } else {
-                            // Automatically fire background fetching if the user taps play on an un-downloaded file
                             settings.downloadCloudTrackOnDemand(activeTrack)
                         }
                     }
@@ -148,7 +209,6 @@ struct FlowView: View {
                 }
                 
                 VStack(spacing: 6) {
-                    // Context text label updates dynamically depending on local file caching
                     Group {
                         if !isCurrentTrackLocallyReady {
                             Text(settings.trackDownloadStates[settings.selectedTrack] == .downloading ? "Syncing iCloud instrumental buffers..." : "Instrumental offline • Tap waveform to download")
@@ -164,7 +224,7 @@ struct FlowView: View {
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(contentColor)
                         
-                        Text(settings.factoryTracks.contains(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack) ? "Studio Production Asset" : "Custom Cloud Asset")
+                        Text(settings.factoryTracks.contains(where: { $0.localizedCaseInsensitiveContains(audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack) }) ? "Studio Production Asset" : "Custom Cloud Asset")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(contentColor.opacity(0.4))
                     }
@@ -191,25 +251,43 @@ struct FlowView: View {
         }
     }
     
+    // 🚀 FIXED: Point index mapping logic at instrumentalBackingTracks instead of raw availableTracks roster
     private var currentTrackIndex: Int {
-        settings.availableTracks.firstIndex(of: audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack) ?? 0
+        let currentTrackName = !audioManager.activeTrackTitle.isEmpty ? audioManager.activeTrackTitle : settings.selectedTrack
+        let cleanCurrent = currentTrackName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
+        
+        let index = settings.instrumentalBackingTracks.firstIndex(where: { track in
+            let cleanTrack = track.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
+            return cleanTrack == cleanCurrent
+        })
+        
+        return index ?? 0
     }
     
+    // 🚀 FIXED: Point linear navigation controls explicitly at instrumentalBackingTracks
     private func navigateTrack(forward: Bool) {
-        let totalTracks = settings.availableTracks.count
+        let totalTracks = settings.instrumentalBackingTracks.count
         guard totalTracks > 0 else { return }
         
         let newIndex = forward ? (currentTrackIndex + 1) % totalTracks : (currentTrackIndex - 1 + totalTracks) % totalTracks
-        let nextTrackName = settings.availableTracks[newIndex]
-        settings.selectedTrack = nextTrackName
         
-        // Safety: If the user skips to an un-downloaded cloud song while a track is currently playing,
-        // stop the audio engine and fire the on-demand cloud fetch sequence safely.
-        if !settings.factoryTracks.contains(nextTrackName) && !LocalStorageManager.shared.isLocalFileReady(fileName: nextTrackName) {
-            audioManager.stop()
-            settings.downloadCloudTrackOnDemand(nextTrackName)
-        } else if audioManager.isPlaying {
-            audioManager.play(trackName: nextTrackName, using: settings)
+        if settings.instrumentalBackingTracks.indices.contains(newIndex) {
+            let nextTrackName = settings.instrumentalBackingTracks[newIndex]
+            settings.selectedTrack = nextTrackName
+            
+            if !settings.factoryTracks.contains(nextTrackName) && !LocalStorageManager.shared.isLocalFileReady(fileName: nextTrackName) {
+                audioManager.stop()
+                settings.downloadCloudTrackOnDemand(nextTrackName)
+            } else if audioManager.isPlaying {
+                audioManager.play(trackName: nextTrackName, using: settings)
+            }
         }
+    }
+    
+    private func formatTimeLabel(_ time: TimeInterval) -> String {
+        guard !time.isNaN && !time.isInfinite && time > 0 else { return "0:00" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }

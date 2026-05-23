@@ -2,7 +2,7 @@
 //  FlowViewModel.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 20/05/2026.
+//  Created by Vegar Berentsen on 22/05/2026.
 //
 
 import Foundation
@@ -39,7 +39,6 @@ final class FlowViewModel: ObservableObject {
                 let fetchedWords: [String]
                 
                 if settings.freestyleMode == .wordFlowPlusRhymes {
-                    // FIXED: Only treat the custom text field as an anchor if Manual mode is active and it's not empty
                     let anchor: String?
                     if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         anchor = settings.customFocusWord
@@ -49,12 +48,11 @@ final class FlowViewModel: ObservableObject {
                     
                     fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
                     
-                    // FIXED: Only fill the text field automatically if the user explicitly wants manual control active
                     if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
                     }
                 } else {
-                    // 2. Standard Keywords API Mode -> Use Datamuse for random/related streams
+                    // Standard Keywords API Mode -> Use Datamuse for random/related streams
                     fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: nil)
                 }
                 
@@ -66,7 +64,6 @@ final class FlowViewModel: ObservableObject {
             isLoading = false
             
             if settings.freestyleMode == .wordFlowPlusRhymes {
-                // FIXED: Only evaluate local text targets if Manual Mode is flipped on
                 let anchor: String?
                 if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     anchor = settings.customFocusWord
@@ -77,7 +74,6 @@ final class FlowViewModel: ObservableObject {
                 Task {
                     let fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
                     
-                    // FIXED: Prevent the engine from sticky-locking your text input in automated modes
                     if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
                     }

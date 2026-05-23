@@ -55,8 +55,8 @@ struct MainTabView: View {
                                         AudioRecorderManager.shared.stopRecording(settings: settings)
                                     } else {
                                         #if os(iOS)
-                                        // Dynamic cross-platform fallback for iOS target authorization hooks
-                                        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                                        // 🚀 SUPREME API UPDATE: Replaced deprecated AVAudioSession request with modern iOS 17+ handler
+                                        AVAudioApplication.requestRecordPermission { granted in
                                             if granted {
                                                 DispatchQueue.main.async {
                                                     AudioRecorderManager.shared.startRecording(settings: settings)
@@ -187,12 +187,9 @@ struct MainTabView: View {
                     case .inspector:
                         FlowInspectorView()
                             .environmentObject(settings)
-                            // FIXED: Removed the disruptive .id(...) token wrapper entirely
-                            // to preserve internal scroll positions during layout changes
                     case .mediaCenter:
                         MediaCenterView()
                             .environmentObject(settings)
-                            // FIXED: Removed the disruptive .id(...) token wrapper here too
                     }
                 }
                 .frame(width: 320)

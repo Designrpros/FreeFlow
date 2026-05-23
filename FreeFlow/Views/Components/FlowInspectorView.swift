@@ -519,12 +519,11 @@ struct FlowInspectorView: View {
         .background(panelBackground)
     }
     
-    // FIXED: Upgraded layout checking to accurately identify hidden extension changes
     @ViewBuilder
     private func inspectorTrackRow(title: String, identifier: String, isCustom: Bool) -> some View {
         let isSelected = settings.selectedTrack == identifier
         
-        // FIXED: Try verifying custom tracking variants safely (literal name first, then suffix-stripped variants)
+        // FIXED: Verifies local file mapping status cleanly across extensions via our updated LocalStorageManager method
         let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
         let isLocalReady = !isCustom ||
                            LocalStorageManager.shared.isLocalFileReady(fileName: identifier) ||

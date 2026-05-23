@@ -19,9 +19,5 @@
 	<array>
 		<string>iCloud.freeflow</string>
 	</array>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.FreeFlow</string>
-	</array>
 </dict>
 </plist>

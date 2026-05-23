@@ -14,7 +14,6 @@ struct RhymesView: View {
     @State private var isLoading: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
-    // FIXED: Evaluates interface light/dark states through your decoupled theme variables
     private var isDarkMode: Bool {
         if settings.appTheme == .system {
             return colorScheme == .dark
@@ -22,7 +21,6 @@ struct RhymesView: View {
         return settings.appTheme == .dark
     }
     
-    // FIXED: Pulls backend layout color arrays matching your global background configurations
     private var workspaceBackground: Color {
         settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
@@ -37,7 +35,6 @@ struct RhymesView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Native Glass Search field bar
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
@@ -64,7 +61,6 @@ struct RhymesView: View {
             ScrollView {
                 VStack(spacing: 32) {
                     VStack(spacing: 8) {
-                        // Focus Target Title
                         Text(searchText.lowercased())
                             .font(.system(size: 54, weight: .bold, design: .rounded))
                             .foregroundColor(mainTextColor)
@@ -80,7 +76,6 @@ struct RhymesView: View {
                     }
                     .padding(.top)
                     
-                    // Structural Grid Layout View
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Rhyming Companion Index")
                             .font(.system(size: 11, weight: .bold))
@@ -97,7 +92,6 @@ struct RhymesView: View {
                                     if let syllables = item.numSyllables {
                                         Text("\(syllables) syllable\(syllables == 1 ? "" : "s")")
                                             .font(.system(size: 9, design: .monospaced))
-                                            // FIXED: Tints grid subheaders to follow your active Accent Theme smoothly
                                             .foregroundColor(settings.appAccent.color.opacity(0.9))
                                     }
                                 }
@@ -112,10 +106,8 @@ struct RhymesView: View {
                 }
             }
         }
-        // FIXED: Implements full layout backplate background tracking from settings choices
         .background(workspaceBackground.ignoresSafeArea())
         .task {
-            // Initial network payload evaluation on screen launch
             executeRhymeSearch()
         }
     }
@@ -132,9 +124,4 @@ struct RhymesView: View {
             }
         }
     }
-}
-
-#Preview {
-    RhymesView()
-        .environmentObject(FlowSettings())
 }

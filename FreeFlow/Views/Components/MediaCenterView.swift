@@ -45,6 +45,7 @@ struct MediaCenterView: View {
         settings.availableTracks.filter { settings.factoryTracks.contains($0) }
     }
 
+    // 🚀 FIXED: Changed from 'some Scene' back to 'some View' to satisfy protocol inheritance constraints safely
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -314,7 +315,12 @@ struct MediaCenterView: View {
     @ViewBuilder
     private func trackRow(title: String, identifier: String, isCustom: Bool, entityRef: UploadedTrackEntity?) -> some View {
         let isSelected = settings.selectedTrack == identifier
-        let isLocalReady = !isCustom || LocalStorageManager.shared.isLocalFileReady(fileName: identifier)
+        
+        let strippedName = identifier.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+        let isLocalReady = !isCustom ||
+                           LocalStorageManager.shared.isLocalFileReady(fileName: identifier) ||
+                           LocalStorageManager.shared.isLocalFileReady(fileName: strippedName)
+                           
         let currentDownloadState = settings.trackDownloadStates[identifier] ?? .idle
         
         HStack {
@@ -373,7 +379,6 @@ struct MediaCenterView: View {
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
-        // FIXED: Deletion has been moved entirely into an interactive right-click context menu
         .contextMenu {
             if isCustom, let entity = entityRef {
                 Button(role: .destructive) {
@@ -403,7 +408,7 @@ struct MediaCenterView: View {
     private func deleteTrackAction(entity: UploadedTrackEntity, fileName: String) {
         if settings.selectedTrack == fileName {
             audioManager.stop()
-            settings.selectedTrack = "Chrome_On_The_Curb"
+            settings.selectedTrack = "Chrome_On_The_Curb.mp3"
         }
         settings.trackDownloadStates[fileName] = nil
         LocalStorageManager.shared.deletePhysicalFile(fileName: fileName)

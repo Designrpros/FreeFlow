@@ -8,10 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var settings = FlowSettings()
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @EnvironmentObject private var settings: FlowSettings
     @State private var selectedTab: MainTab = .flow
     @State private var showingInspector: Bool = true
-    @State private var hasFinishedSplash: Bool = false
 
     // FIXED: Uses the updated .colorScheme property mapped inside our clean AppTheme framework
     private var resolvedColorScheme: ColorScheme? {
@@ -20,7 +20,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if hasFinishedSplash {
+            if appViewModel.hasFinishedSplash {
                 MainTabView(selectedTab: $selectedTab, showingInspector: $showingInspector)
                     .environmentObject(settings)
                     .preferredColorScheme(resolvedColorScheme)
@@ -32,12 +32,9 @@ struct ContentView: View {
                 SplashView()
                     .environmentObject(settings)
                     .transition(.opacity)
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                hasFinishedSplash = true
-                            }
-                        }
+                    .task {
+                        // 🚀 FIXED: Triggers structured multi-threaded background ecosystem setup task immediately on view boot
+                        await appViewModel.prepareAppEcosystem(settings: settings)
                     }
             }
         }

@@ -80,7 +80,6 @@ struct RecordingsView: View {
                                 Spacer()
                                 
                                 HStack(spacing: 16) {
-                                    // iCloud Download / Share Action Core
                                     switch fileStates[filename] ?? .idle {
                                     case .downloading:
                                         ProgressView()
@@ -106,7 +105,6 @@ struct RecordingsView: View {
                                         .buttonStyle(.plain)
                                     }
                                     
-                                    // TACTILE PLAY / STOP BUTTON CONTROLS (FIXED & FULLY FUNCTIONAL)
                                     Button {
                                         handlePlaybackTap(for: filename)
                                     } label: {
@@ -196,8 +194,6 @@ struct RecordingsView: View {
         }
     }
     
-    // --- PROCESSING ENGINE ---
-    
     private func checkInitialFileState(filename: String) {
         if LocalStorageManager.shared.isLocalFileReady(fileName: filename) {
             let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
@@ -220,11 +216,9 @@ struct RecordingsView: View {
             return
         }
         
-        // Dynamic Verification: Ensure track bytes exist locally prior to hardware engine feed
         if case .ready = fileStates[filename] {
             audioManager.play(trackName: filename, using: settings)
         } else {
-            // Automatically switch row to downloading, pull the asset, and engage playback immediately upon delivery
             evaluateAndPrepareFile(filename: filename, playImmediately: true)
         }
     }
@@ -234,13 +228,11 @@ struct RecordingsView: View {
         
         DispatchQueue.global(qos: .userInitiated).async {
             let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
-            
-            // Command operating system daemon to cache local stream fragments
             try? FileManager.default.startDownloadingUbiquitousItem(at: targetURL)
             
             var downloadComplete = false
             var attempts = 0
-            let maxAttempts = 120 // 60 seconds safe timeout ceiling check pass
+            let maxAttempts = 120
             
             while !downloadComplete && attempts < maxAttempts {
                 if LocalStorageManager.shared.isLocalFileReady(fileName: filename) {
@@ -262,7 +254,6 @@ struct RecordingsView: View {
                             self.audioManager.play(trackName: filename, using: self.settings)
                         }
                     } else {
-                        // Fallback verification override: Check physical disk asset frames one last time
                         if FileManager.default.fileExists(atPath: targetURL.path) {
                             self.fileStates[filename] = .ready(targetURL)
                             if playImmediately {
@@ -296,12 +287,10 @@ struct RecordingsView: View {
         let destinationURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: targetFilename)
         
         guard originalURL != destinationURL else { return }
-        
         if isCurrentTrackPlaying(oldFilename) { audioManager.stop() }
         
         do {
             try FileManager.default.moveItem(at: originalURL, to: destinationURL)
-            
             let oldState = fileStates[oldFilename]
             fileStates[oldFilename] = nil
             if case .ready = oldState {

@@ -2,7 +2,7 @@
 //  FlowSettings.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 22/05/2026.
+//  Created by Vegar Berentsen on 23/05/2026.
 //
 
 import Combine
@@ -53,16 +53,11 @@ enum CanvasColor: String, CaseIterable, Identifiable {
     
     func backgroundColor(isDark: Bool) -> Color {
         switch self {
-        case .defaultGray:
-            return isDark ? Color(white: 0.12) : Color(white: 0.95)
-        case .monochrome:
-            return isDark ? Color(white: 0.05) : Color(white: 1.0)
-        case .ember:
-            return isDark ? Color(red: 0.25, green: 0.11, blue: 0.04) : Color(red: 0.96, green: 0.91, blue: 0.86)
-        case .oceanic:
-            return isDark ? Color(red: 0.09, green: 0.20, blue: 0.17) : Color(red: 0.88, green: 0.94, blue: 0.92)
-        case .midnight:
-            return isDark ? Color(red: 0.10, green: 0.09, blue: 0.18) : Color(red: 0.91, green: 0.90, blue: 0.96)
+        case .defaultGray: return isDark ? Color(white: 0.12) : Color(white: 0.95)
+        case .monochrome:  return isDark ? Color(white: 0.05) : Color(white: 1.0)
+        case .ember:       return isDark ? Color(red: 0.25, green: 0.11, blue: 0.04) : Color(red: 0.96, green: 0.91, blue: 0.86)
+        case .oceanic:     return isDark ? Color(red: 0.09, green: 0.20, blue: 0.17) : Color(red: 0.88, green: 0.94, blue: 0.92)
+        case .midnight:    return isDark ? Color(red: 0.10, green: 0.09, blue: 0.18) : Color(red: 0.91, green: 0.90, blue: 0.96)
         }
     }
 }
@@ -73,7 +68,6 @@ enum AppAccent: String, CaseIterable, Identifiable {
     case ember = "Ember"
     case oceanic = "Oceanic"
     case midnight = "Midnight"
-    
     var id: String { rawValue }
     
     var color: Color {
@@ -94,68 +88,64 @@ enum PlaybackEndBehavior: String, CaseIterable, Identifiable {
 }
 
 final class FlowSettings: ObservableObject {
-    @Published var freestyleMode: FreestyleMode = .standardKeywords
-    @Published var refreshStyle: RefreshStyle = .manualTap
-    @Published var wordSource: WordSource = .staticLibrary
-
+    // Properties that require disk persistence use didSet to notify the persistence subject
+    @Published var freestyleMode: FreestyleMode = .standardKeywords { didSet { saveTrigger.send() } }
+    @Published var refreshStyle: RefreshStyle = .manualTap { didSet { saveTrigger.send() } }
+    @Published var wordSource: WordSource = .staticLibrary { didSet { saveTrigger.send() } }
     @Published var showAdvanced: Bool = false
     
-    // FIXED: Appends a property observer to broadcast overrides to window instances instantly
     @Published var appTheme: AppTheme = .system {
         didSet {
-            DispatchQueue.main.async {
-                self.applyInterfaceThemeOverride()
-            }
+            saveTrigger.send()
+            DispatchQueue.main.async { self.applyInterfaceThemeOverride() }
         }
     }
     
-    @Published var canvasColor: CanvasColor = .defaultGray
-    @Published var appAccent: AppAccent = .defaultBlue
-    
-    @Published var preventScreenLock: Bool = true
-    @Published var loopWithCrossfade: Bool = true
-    
-    @Published var selectedTrack: String = "Chrome_On_The_Curb"
-    @Published var endBehavior: PlaybackEndBehavior = .loopTrack
-    
+    @Published var canvasColor: CanvasColor = .defaultGray { didSet { saveTrigger.send() } }
+    @Published var appAccent: AppAccent = .defaultBlue { didSet { saveTrigger.send() } }
+    @Published var preventScreenLock: Bool = true { didSet { saveTrigger.send() } }
+    @Published var loopWithCrossfade: Bool = true { didSet { saveTrigger.send() } }
+    @Published var selectedTrack: String = "Chrome_On_The_Curb.mp3" { didSet { saveTrigger.send() } }
+    @Published var endBehavior: PlaybackEndBehavior = .loopTrack { didSet { saveTrigger.send() } }
     @Published var customFocusWord: String = ""
-    @Published var useManualAnchor: Bool = false
-
-    @Published var refreshInterval: Double = 10.0
-
+    @Published var useManualAnchor: Bool = false { didSet { saveTrigger.send() } }
+    @Published var refreshInterval: Double = 10.0 { didSet { saveTrigger.send() } }
     @Published var availableTracks: [String] = []
     
     @Published var numberOfWords: Int = 4 {
         didSet {
             if numberOfWords < 1 { numberOfWords = 1 }
             if numberOfWords > 6 { numberOfWords = 6 }
+            saveTrigger.send()
         }
     }
     
+    // UI layout execution state modifications (Excluded from Disk Persistence saving loop to remove stutters)
     @Published var isRecordingSession: Bool = false
     @Published var recordingDuration: TimeInterval = 0.0
     
-    // PRO AUDIO LAYOUT CONTROLS
     @Published var playbackSpeed: Double = 1.0 {
         didSet {
             if playbackSpeed < 0.5 { playbackSpeed = 0.5 }
             if playbackSpeed > 2.0 { playbackSpeed = 2.0 }
+            saveTrigger.send()
         }
     }
     @Published var pitchShiftSemitones: Int = 0 {
         didSet {
             if pitchShiftSemitones < -12 { pitchShiftSemitones = -12 }
             if pitchShiftSemitones > 12 { pitchShiftSemitones = 12 }
+            saveTrigger.send()
         }
     }
     @Published var crossfadeDuration: Double = 1.0 {
         didSet {
             if crossfadeDuration < 0.1 { crossfadeDuration = 0.1 }
             if crossfadeDuration > 5.0 { crossfadeDuration = 5.0 }
+            saveTrigger.send()
         }
     }
-    @Published var enableMicMonitor: Bool = false
-    
+    @Published var enableMicMonitor: Bool = false { didSet { saveTrigger.send() } }
     @Published var trackDownloadStates: [String: TrackDownloadState] = [:]
 
     enum TrackDownloadState {
@@ -165,35 +155,58 @@ final class FlowSettings: ObservableObject {
     }
     
     let factoryTracks: [String] = [
-        "Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch",
-        "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"
+        "Chrome_On_The_Curb.mp3", "JazzyFlow.mp3", "JazzyFlowDeep.mp3", "Late_August_Porch.mp3",
+        "Low_Rider_Glide.mp3", "Morning_on_the_Deck.mp3", "Passing_Thru_Willow_Street.mp3", "Under_The_Surface.mp3"
     ]
     
-    private let appViewModel = AppViewModel()
+    var instrumentalBackingTracks: [String] {
+        availableTracks.filter { !$0.hasPrefix("FreeFlow_Session_") }
+    }
+    
+    // 🚀 FIXED: Isolated persistent publisher subject protects audio loops from global layout redrawing tasks
+    private let saveTrigger = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
     
     init() {
-        refreshTracksRoster()
-        appViewModel.loadSavedSettings(into: self)
+        self.availableTracks = factoryTracks
         
-        // FIXED: Re-verify system interface matching on initial startup configuration load
+        let model = AppViewModel()
+        model.loadSavedSettings(into: self)
+        
+        sanitizeSelectedTrackExtension()
+        refreshTracksRoster()
+        
         DispatchQueue.main.async {
             self.applyInterfaceThemeOverride()
         }
         
-        self.objectWillChange
+        // 🚀 FIXED PERSISTENCE PIPELINE: Only commits settings changes to disk when values explicitly modify
+        saveTrigger
+            .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                DispatchQueue.main.async {
-                    self.appViewModel.saveSettings(from: self)
-                }
+                AppViewModel().saveSettings(from: self)
             }
             .store(in: &cancellables)
     }
     
+    private func sanitizeSelectedTrackExtension() {
+        if !selectedTrack.hasSuffix(".mp3") && !selectedTrack.hasSuffix(".m4a") {
+            let lowercased = selectedTrack.lowercased()
+            if lowercased.contains("chrome") { selectedTrack = "Chrome_On_The_Curb.mp3" }
+            else if lowercased.contains("jazzyflowdeep") { selectedTrack = "JazzyFlowDeep.mp3" }
+            else if lowercased.contains("jazzyflow") { selectedTrack = "JazzyFlow.mp3" }
+            else if lowercased.contains("late_august") { selectedTrack = "Late_August_Porch.mp3" }
+            else if lowercased.contains("low_rider") { selectedTrack = "Low_Rider_Glide.mp3" }
+            else if lowercased.contains("morning") { selectedTrack = "Morning_on_the_Deck.mp3" }
+            else if lowercased.contains("passing") { selectedTrack = "Passing_Thru_Willow_Street.mp3" }
+            else if lowercased.contains("under") { selectedTrack = "Under_The_Surface.mp3" }
+            else { selectedTrack = "\(selectedTrack).mp3" }
+        }
+    }
+    
     func refreshTracksRoster() {
         var updatedTracks = factoryTracks
-        
         let targetDirectory: URL
         if let iCloudURL = FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents") {
             targetDirectory = iCloudURL
@@ -205,56 +218,52 @@ final class FlowSettings: ObservableObject {
             if !FileManager.default.fileExists(atPath: targetDirectory.path) {
                 try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
             }
-            
             let fileURLs = try FileManager.default.contentsOfDirectory(at: targetDirectory, includingPropertiesForKeys: nil)
-            
             let customTracks = fileURLs
                 .filter { $0.pathExtension == "m4a" || $0.pathExtension == "mp3" }
                 .map { $0.lastPathComponent }
                 .sorted()
-            
             updatedTracks.append(contentsOf: customTracks)
-            
         } catch {
             print("⚠️ [FlowSettings] Failed to scan disk container folder: \(error.localizedDescription)")
         }
         
-        DispatchQueue.main.async {
-            self.availableTracks = updatedTracks
+        sanitizeSelectedTrackExtension()
+        
+        let backingTracks = updatedTracks.filter { !$0.hasPrefix("FreeFlow_Session_") }
+        if !backingTracks.contains(selectedTrack) {
+            let baseWithoutExtension = selectedTrack.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
+            if let matchedWithExtension = backingTracks.first(where: { $0.localizedCaseInsensitiveContains(baseWithoutExtension) }) {
+                selectedTrack = matchedWithExtension
+            } else {
+                selectedTrack = "Chrome_On_The_Curb.mp3"
+            }
         }
+        
+        self.availableTracks = updatedTracks
     }
 
-    /// Robust, non-blocking asynchronous utility using system-native tracking to fetch cloud audio assets
     func downloadCloudTrackOnDemand(_ filename: String) {
         guard trackDownloadStates[filename] != .downloading else { return }
-        
         print("🔊 [FlowSettings] Initiating native system download hook for cloud asset: \(filename)")
         
-        DispatchQueue.main.async {
-            self.trackDownloadStates[filename] = .downloading
-        }
+        DispatchQueue.main.async { self.trackDownloadStates[filename] = .downloading }
         
         DispatchQueue.global(qos: .userInitiated).async {
             let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
-            
             let strippedName = filename.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "")
             let alternateURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: strippedName)
-            
             let finalDownloadURL = FileManager.default.fileExists(atPath: alternateURL.path) ? alternateURL : targetURL
             
             try? FileManager.default.startDownloadingUbiquitousItem(at: finalDownloadURL)
             
             var downloadComplete = false
             var attempts = 0
-            let maxAttempts = 120 // 60 seconds total maximum time allocation budget
+            let maxAttempts = 120
             
             while !downloadComplete && attempts < maxAttempts {
                 if LocalStorageManager.shared.isLocalFileReady(fileName: filename) ||
-                   LocalStorageManager.shared.isLocalFileReady(fileName: strippedName) ||
-                   LocalStorageManager.shared.isLocalFileReady(fileName: finalDownloadURL.lastPathComponent) {
-                    downloadComplete = true
-                } else if let values = try? finalDownloadURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
-                          values.ubiquitousItemDownloadingStatus == .current {
+                   LocalStorageManager.shared.isLocalFileReady(fileName: strippedName) {
                     downloadComplete = true
                 } else {
                     attempts += 1
@@ -262,55 +271,37 @@ final class FlowSettings: ObservableObject {
                 }
             }
             
-            // FIXED: Isolate structural updates cleanly inside a main-thread boundary to prevent UI state freezups
             DispatchQueue.main.async {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if downloadComplete {
-                        print("🔊 [FlowSettings] Native check success for [\(filename)]. Refreshing UI layouts...")
                         self.trackDownloadStates[filename] = .ready
-                        
-                        // Safely trigger roster reconstruction on the main UI thread loop
                         self.refreshTracksRoster()
-                        
                         if self.selectedTrack == filename && !AudioManager.shared.isPlaying {
                             AudioManager.shared.play(trackName: filename, using: self)
                         }
                     } else {
-                        print("⚠️ [FlowSettings] Native verification timed out or file mismatch occurred for name string: \(filename)")
-                        if FileManager.default.fileExists(atPath: finalDownloadURL.path) {
-                            self.trackDownloadStates[filename] = .ready
-                            self.refreshTracksRoster()
-                        } else {
-                            self.trackDownloadStates[filename] = .idle
-                        }
+                        self.trackDownloadStates[filename] = .idle
                     }
                 }
             }
         }
     }
     
-    // FIXED: Multiplatform user interface layer renderer synchronization engine
     private func applyInterfaceThemeOverride() {
         #if os(iOS)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
         for window in windowScene.windows {
             switch appTheme {
-            case .system:
-                window.overrideUserInterfaceStyle = .unspecified
-            case .light:
-                window.overrideUserInterfaceStyle = .light
-            case .dark:
-                window.overrideUserInterfaceStyle = .dark
+            case .system: window.overrideUserInterfaceStyle = .unspecified
+            case .light:  window.overrideUserInterfaceStyle = .light
+            case .dark:   window.overrideUserInterfaceStyle = .dark
             }
         }
         #elseif os(macOS)
         switch appTheme {
-        case .system:
-            NSApp.appearance = nil
-        case .light:
-            NSApp.appearance = NSAppearance(named: .aqua)
-        case .dark:
-            NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .system: NSApp.appearance = nil
+        case .light:  NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:   NSApp.appearance = NSAppearance(named: .darkAqua)
         }
         #endif
     }

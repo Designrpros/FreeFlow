@@ -14,7 +14,6 @@ struct ExploreView: View {
     @State private var isLoading: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     
-    // FIXED: Evaluates light/dark canvas states cleanly from your decoupled settings property wrapper
     private var isDarkMode: Bool {
         if settings.appTheme == .system {
             return colorScheme == .dark
@@ -22,7 +21,6 @@ struct ExploreView: View {
         return settings.appTheme == .dark
     }
     
-    // FIXED: Pulls background colors dynamically matching other studio workspace tabs
     private var workspaceBackground: Color {
         settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
@@ -37,7 +35,6 @@ struct ExploreView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Integrated Top Search Field Bar
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
@@ -78,7 +75,6 @@ struct ExploreView: View {
                                 if let syllables = item.numSyllables {
                                     Text("\(syllables) syl")
                                         .font(.system(size: 10, design: .monospaced))
-                                        // FIXED: Re-tinted syllable counter labels to match your active Accent Theme selection perfectly
                                         .foregroundColor(settings.appAccent.color)
                                 }
                             }
@@ -91,10 +87,8 @@ struct ExploreView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        // FIXED: Sets explicit background layer tracking matching chosen layout presets natively
         .background(workspaceBackground.ignoresSafeArea())
         .task {
-            // Initial payload load on view appear
             executeExploreSearch()
         }
     }
@@ -111,9 +105,4 @@ struct ExploreView: View {
             }
         }
     }
-}
-
-#Preview {
-    ExploreView()
-        .environmentObject(FlowSettings())
 }
