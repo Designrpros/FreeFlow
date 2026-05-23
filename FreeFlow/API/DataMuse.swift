@@ -82,7 +82,12 @@ class DatamuseAPI {
                 return []
             }
             
-            return try JSONDecoder().decode([DatamuseWord].self, from: data)
+            let decoded = try JSONDecoder().decode([DatamuseWord].self, from: data)
+            
+            // 🚀 FIXED: Filter out the input anchor word and sort context entries cleanly by priority score metadata
+            return decoded
+                .filter { $0.word.lowercased() != cleanPhrase }
+                .sorted(by: { ($0.score ?? 0) > ($1.score ?? 0) })
                 
         } catch {
             if let safeData = downloadedData, let rawString = String(data: safeData, encoding: .utf8) {

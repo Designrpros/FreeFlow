@@ -30,7 +30,7 @@ final class FlowViewModel: ObservableObject {
             refresh(using: settings)
         }
         
-        // 🚀 FIXED: Bind our auto-refresh engine explicitly to changes inside FlowSettings
+        // Bind our auto-refresh engine explicitly to changes inside FlowSettings
         observeSettingsEcosystem(settings)
     }
     
@@ -54,6 +54,7 @@ final class FlowViewModel: ObservableObject {
     /// Handles shuffling/fetching states smoothly depending on whether the source is local or network-reliant
     func refresh(using settings: FlowSettings) {
         let isUsingAPI = (settings.wordSource == .datamuseAPI)
+        let isRhymeModeActive = (settings.freestyleMode == .wordFlowPlusRhymes)
         
         if isUsingAPI {
             isLoading = true
@@ -61,7 +62,7 @@ final class FlowViewModel: ObservableObject {
             Task {
                 let fetchedWords: [String]
                 
-                if settings.freestyleMode == .wordFlowPlusRhymes {
+                if isRhymeModeActive {
                     let anchor: String?
                     if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         anchor = settings.customFocusWord
@@ -69,13 +70,15 @@ final class FlowViewModel: ObservableObject {
                         anchor = nil
                     }
                     
-                    fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
+                    // 🚀 FIXED: Added useRhymeMode: true parameter argument to match the repository signature
+                    fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor, useRhymeMode: true)
                     
                     if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
                     }
                 } else {
-                    fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: nil)
+                    // 🚀 FIXED: Added useRhymeMode: false parameter argument to handle API standard concept streams
+                    fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: nil, useRhymeMode: false)
                 }
                 
                 self.words = fetchedWords
@@ -84,7 +87,7 @@ final class FlowViewModel: ObservableObject {
         } else {
             isLoading = false
             
-            if settings.freestyleMode == .wordFlowPlusRhymes {
+            if isRhymeModeActive {
                 let anchor: String?
                 if settings.useManualAnchor && !settings.customFocusWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     anchor = settings.customFocusWord
@@ -93,7 +96,8 @@ final class FlowViewModel: ObservableObject {
                 }
                 
                 Task {
-                    let fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor)
+                    // 🚀 FIXED: Added useRhymeMode: true parameter argument for offline static rhyming tables
+                    let fetchedWords = await repo.rhymeWords(count: settings.numberOfWords, focusingOn: anchor, useRhymeMode: true)
                     
                     if anchor == nil, settings.useManualAnchor, let firstWord = fetchedWords.first {
                         settings.customFocusWord = firstWord
@@ -106,7 +110,7 @@ final class FlowViewModel: ObservableObject {
         }
     }
     
-    // 🚀 FIXED: Background asynchronous loop decoupled completely from thread-blocked publishers
+    // Background asynchronous loop decoupled completely from thread-blocked publishers
     private func startAutoRefreshEngine(interval: Double, settings: FlowSettings) {
         autoRefreshTask?.cancel()
         
