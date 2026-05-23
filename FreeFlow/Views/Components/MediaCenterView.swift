@@ -50,13 +50,6 @@ struct MediaCenterView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Configure app execution parameters, studio monitoring, and cloud audio layouts.")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(secondaryTextColor)
-                    }
-                    .padding(.top, 16)
-                    
                     // --- ENGINE CONFIGURATIONS PANEL CARD ---
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Engine Configurations")

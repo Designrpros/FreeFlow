@@ -1,61 +1,28 @@
-# FreeFlow 🌊
+FreeFlow
 
-FreeFlow is a high-performance, cross-platform assistant for lyricists, freestyle artists, and writers built natively for **macOS** and **iOS** using **SwiftUI**, **Combine**, and **Core Data + CloudKit**. 
+FreeFlow is the ultimate high-performance freestyle studio and writing assistant designed natively for iOS and macOS. Built for lyricists, poets, and writers who need a seamless, zero-distraction environment, FreeFlow combines intelligent vocabulary generators with a built-in studio backing track player to keep your creative momentum moving.
 
-The app generates adaptive keyword stacks and rhyming streams in real-time, matching words to a built-in crossfading loop studio playback container. It features a responsive multi-column workspace layout that functions seamlessly on an iPhone or a desktop Mac display.
+Whether practicing bars on an iPhone on the go or writing full-length projects using a multi-column desktop Mac workspace, FreeFlow adapts perfectly to your creative environment.
 
----
+Key Features
 
-## 🚀 Key Features
+Fully Customizable Creative Studio
+• Tailored Workspace Themes: Adjust your creative environment using dedicated, high-contrast canvas styles such as Ember, Oceanic, Midnight, or clean Monochrome to match your mood or lighting
+• Adaptive Accent Palettes: Personalize the interface indicators and slider accents with selectable styling presets that seamlessly integrate across both Light and Dark modes
 
-### 1. Dynamic Lyrics Display Canvas
-- **Adaptive Stacks:** Scales typography layouts (`1...6` rows) instantly based on view configuration settings to guarantee clip-free reading.
-- **Phonetic Anchor Engine:** Focuses on single anchor words or splits down into multi-tier sub-rhyme flows dynamically.
+True Dual-Mode Word Generation
+• Standard Keywords: Challenge your storytelling with completely randomized, diverse, and non-rhyming vocabulary streams. Perfect for breaking writer's block and building brand-new conceptual associations
+• Word Flow + Rhymes: Lock in your flow with laser-accurate phonetic rhyme families powered by live network lookups. Keep your trailing syllable matching tight across every verse or stanza
 
-### 2. Studio Media Center
-- **Hybrid Storage Architecture:** Stores physical binary audio elements locally in the device's sandbox document folder while syncing registry metadata records globally across iCloud via Core Data tracking.
-- **Loop Matrix Management:** Seamlessly crossfades overlapping track endings over an adjustable timeline, supporting custom audio library imports (`.mp3`).
-- **State Persistence:** Repurposes light configuration lifecycle parameters inside local device memory stores using an automated Combine subscription pipeline (`UserDefaults`).
+Built-In Backing Track Studio
+• Advanced Audio Control: Warp your practice speeds with precise studio playback multipliers and adjust key transposition via pitch-shifting semitone controls
+• Custom Library Support: Import your own backing track instrumentals seamlessly into your local workspace
+• Smart Cloud Management: Keep your local storage light. Custom imported tracks store securely in your private iCloud library and download effortlessly on demand
 
-### 3. Asynchronous Semantic Pipelines
-- **Datamuse Network Integration:** Queries remote lexical servers asynchronously via modern `async/await` tasks to extract syllable metadata, perfect rhymes, and thematic trigger associations.
-- **Resilient Fallback Design:** Drops back automatically to an offline compiled database configuration if the internet connection drops or if server response vectors fall below requested layout count limits.
+Intelligent Lexical Engine
+• Live Server Integration: Harness dynamic remote queries to fetch precise syllable counts, perfect rhymes, and advanced word matches
+• Bulletproof Offline Fallback: Keep creating even when offline. The app automatically detects connection drops and instantly transitions to a massive, hand-curated local database matrix so your session never gets interrupted
 
-### 4. iCloud Multi-Column Notepad
-- **Modern Split Routing:** Implements native `NavigationSplitView` setups. Expands gracefully into sidebar-driven workspaces on macOS and adapts down to standard stacked swipe navigation views on iPhones.
-- **Real-Time Data Streams:** Binds text editors to the background context layer using `@FetchRequest`, providing automatic cloud updates and background merging across devices.
-
----
-
-## 🛠 Tech Stack
-
-- **UI Framework:** SwiftUI (Adaptive Layout Architecture)
-- **Asynchronous Lifecycles:** Combine & Swift Concurrency (`async/await`)
-- **Database Layer:** Core Data (Class Definitions / Model extensions)
-- **Cloud Synchronization:** CloudKit Private DB Containers
-- **Audio Engine:** AVAudioPlayer Framework Utilities
-- **API Provider:** Datamuse API (JSON REST Vector Arrays)
-
----
-
-## 📁 Repository Structure
-
-```text
-FreeFlow/
-├── API/
-│   └── DatamuseAPI.swift          # Live network REST client
-├── Data/
-│   ├── WordsRepository.swift      # Word generation rule abstractions
-│   └── RhymesDatabase.swift       # Local database backup fallback arrays
-├── Model/
-│   ├── FlowNoteEntity.xcdatamodeld # Core Data model layer blueprints
-│   └── FlowSettings.swift         # Global @Published configuration models
-├── Tabs/
-│   ├── FlowView.swift             # Primary lyrics player viewport
-│   ├── FlowInspectorView.swift    # Right-hand global parameter options sheet
-│   ├── RhymesView.swift           # Syllable-indexed rhyming search engine
-│   ├── ExploreView.swift          # Semantic concept mapping index
-│   ├── NotepadView.swift          # Modern adaptive iCloud text canvas
-│   └── MediaCenterView.swift      # Advanced audio allocation configuration modal
-└── ViewModel/
-    └── AppViewModel.swift         # User configuration state disk persistence 
+iCloud Multi-Column Notepad
+• Seamless Note Synchronization: Jot down your ideas, bars, or full projects alongside the live word display. Notes sync instantly across your entire network of Apple devices
+• Adaptive Multi-Column Layout: Enjoy a spacious split-view layout on larger Mac displays that neatly condenses down to a single, gesture-driven flow on mobile screens
