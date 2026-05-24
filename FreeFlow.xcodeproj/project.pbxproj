@@ -10,6 +10,16 @@
 		AD023BA82FBF50970096AF08 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = AD023BA72FBF50970096AF08 /* README.md */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		AD4E06272FC348DB009D8E6D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AD014A512FBDA3C50031DD16 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AD014A582FBDA3C50031DD16;
+			remoteInfo = FreeFlow;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		AD13E9A92FC05049008FEE3E /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -27,6 +37,7 @@
 		AD014A592FBDA3C50031DD16 /* FreeFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FreeFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD023BA72FBF50970096AF08 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		AD13E9982FC05046008FEE3E /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		AD4E06232FC348DB009D8E6D /* FreeFlowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FreeFlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -48,10 +59,22 @@
 			path = FreeFlow;
 			sourceTree = "<group>";
 		};
+		AD4E06242FC348DB009D8E6D /* FreeFlowTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FreeFlowTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AD014A562FBDA3C50031DD16 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AD4E06202FC348DB009D8E6D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -66,6 +89,7 @@
 			children = (
 				AD023BA72FBF50970096AF08 /* README.md */,
 				AD014A5B2FBDA3C50031DD16 /* FreeFlow */,
+				AD4E06242FC348DB009D8E6D /* FreeFlowTests */,
 				AD13E9952FC05045008FEE3E /* Frameworks */,
 				AD014A5A2FBDA3C50031DD16 /* Products */,
 			);
@@ -75,6 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				AD014A592FBDA3C50031DD16 /* FreeFlow.app */,
+				AD4E06232FC348DB009D8E6D /* FreeFlowTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -113,6 +138,29 @@
 			productReference = AD014A592FBDA3C50031DD16 /* FreeFlow.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AD4E06222FC348DB009D8E6D /* FreeFlowTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AD4E062B2FC348DB009D8E6D /* Build configuration list for PBXNativeTarget "FreeFlowTests" */;
+			buildPhases = (
+				AD4E061F2FC348DB009D8E6D /* Sources */,
+				AD4E06202FC348DB009D8E6D /* Frameworks */,
+				AD4E06212FC348DB009D8E6D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AD4E06282FC348DB009D8E6D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AD4E06242FC348DB009D8E6D /* FreeFlowTests */,
+			);
+			name = FreeFlowTests;
+			packageProductDependencies = (
+			);
+			productName = FreeFlowTests;
+			productReference = AD4E06232FC348DB009D8E6D /* FreeFlowTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -125,6 +173,10 @@
 				TargetAttributes = {
 					AD014A582FBDA3C50031DD16 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					AD4E06222FC348DB009D8E6D = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = AD014A582FBDA3C50031DD16;
 					};
 				};
 			};
@@ -143,6 +195,7 @@
 			projectRoot = "";
 			targets = (
 				AD014A582FBDA3C50031DD16 /* FreeFlow */,
+				AD4E06222FC348DB009D8E6D /* FreeFlowTests */,
 			);
 		};
 /* End PBXProject section */
@@ -156,6 +209,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AD4E06212FC348DB009D8E6D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -166,7 +226,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AD4E061F2FC348DB009D8E6D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AD4E06282FC348DB009D8E6D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AD014A582FBDA3C50031DD16 /* FreeFlow */;
+			targetProxy = AD4E06272FC348DB009D8E6D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AD014A672FBDA3C80031DD16 /* Debug */ = {
@@ -405,6 +480,58 @@
 			};
 			name = Release;
 		};
+		AD4E06292FC348DB009D8E6D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8MCGWNL2HK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Alcatelz.FreeFlowTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FreeFlow.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FreeFlow";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		AD4E062A2FC348DB009D8E6D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8MCGWNL2HK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Alcatelz.FreeFlowTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FreeFlow.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FreeFlow";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -422,6 +549,15 @@
 			buildConfigurations = (
 				AD014A6A2FBDA3C80031DD16 /* Debug */,
 				AD014A6B2FBDA3C80031DD16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AD4E062B2FC348DB009D8E6D /* Build configuration list for PBXNativeTarget "FreeFlowTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD4E06292FC348DB009D8E6D /* Debug */,
+				AD4E062A2FC348DB009D8E6D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
