@@ -38,18 +38,26 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     private var isResettingEngine = false
     
+    // CRITICAL HARDWARE FIREWALL TIMESTAMP FOR iOS INITIAL COLD-START INTERRUPTS
+    private var lastSchedulingPassTimestamp: Date = Date.distantPast
+    
+    // Track which playback session is active – used to discard stale timer updates
+    private var playSessionID: UUID?
+    
     // PROGRESS SLIDER SYSTEM EXPOSURES
     @Published var currentProgressPosition: TimeInterval = 0.0
     @Published var activeTrackDuration: TimeInterval = 0.0
-    private var trackingTimer: Timer?
     private var audioSampleRate: Double = 44100.0
     private var audioTotalFrames: AVAudioFrameCount = 0
     
-    // 🚀 CRITICAL RESILIENT MUTEX PROTECTION FLAG (Exposed to UI):
-    // Prevents BOTH AVAudioPlayer and AVAudioPlayerNode manual interruptions from triggering track forwarding
-    @Published var isSeekingTimeline = false
+    // iOS Hardware Synchronization States
+    private var systemStartSampleTime: AVAudioFramePosition = 0
+    private var hasAssignedSampleAnchor: Bool = false
     
-    // Tracks the sample offset when starting a segment seek so the timer calculation stays linear
+    // Increment tracker used to reset slider positions across track loops safely
+    @Published var trackLoopCounter: Int = 0
+    
+    @Published var isSeekingTimeline = false
     private var seekSampleOffset: TimeInterval = 0.0
     
     @Published var isPlaying: Bool = false
@@ -69,12 +77,50 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private override init() {
         super.init()
         
-        // 🚀 PRO AUDIO ENGINE ENABLED GLOBALLY:
-        // We initialize the advanced node-graph graph across all platforms so pitch and warp function everywhere.
-        setupAudioEngineGraph()
+        // 1. Audio session first (iOS)
         #if os(iOS)
         setupAudioSession()
         #endif
+        
+        // 2. Build the engine graph (do NOT start yet)
+        setupAudioEngineGraph()
+    }
+    
+    // Call this once from the splash screen to warm up the engine
+    func prepareEngine() {
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        if !audioEngine.isRunning {
+            do {
+                try audioEngine.start()
+                print("🔊 [AudioManager] Engine prepared and started successfully.")
+            } catch {
+                print("⚠️ [AudioManager] Engine start failed during preparation: \(error.localizedDescription)")
+                useFallbackEngine = true
+            }
+        }
+    }
+    
+    private func ensureEngineRunning() -> Bool {
+        guard !useFallbackEngine else { return false }
+        if audioEngine.isRunning { return true }
+        
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        
+        do {
+            audioEngine.prepare()
+            try audioEngine.start()
+            // Give the system a fraction of a second to stabilise the route
+            Thread.sleep(forTimeInterval: 0.05)
+            return audioEngine.isRunning
+        } catch {
+            print("⚠️ [AudioManager] Engine restart failed: \(error.localizedDescription)")
+            useFallbackEngine = true
+            return false
+        }
     }
     
     private func setupAudioEngineGraph() {
@@ -84,7 +130,8 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         audioEngine.attach(micMonitorMixer)
         
         let mainMixer = audioEngine.mainMixerNode
-        let standardFormat = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2) ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44100.0, channels: 2, interleaved: false)!
+        let standardFormat = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2)
+            ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44100.0, channels: 2, interleaved: false)!
         
         audioEngine.connect(playerNodeA, to: timePitchNodeA, format: standardFormat)
         audioEngine.connect(timePitchNodeA, to: mixerA, format: standardFormat)
@@ -95,14 +142,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         micMonitorMixer.volume = 0.0
         
         audioEngine.prepare()
-        do {
-            try audioEngine.start()
-            useFallbackEngine = false
-            print("🔊 [AudioManager] Pro node-graph initialized successfully.")
-        } catch {
-            print("⚠️ [AudioManager] Node-graph initialization failed. Reverting to fallback system layers.")
-            useFallbackEngine = true
-        }
     }
     
     #if os(iOS)
@@ -114,9 +153,9 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 mode: .default,
                 options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers]
             )
-            try session.setActive(true)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            print("⚠️ [AudioManager] iOS Audio Session routing failed: \(error.localizedDescription)")
+            print("⚠️ [AudioManager] iOS Audio Session setup failed: \(error.localizedDescription)")
         }
     }
     #endif
@@ -149,9 +188,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] semitones in
                 guard let self = self, !self.useFallbackEngine else { return }
-                
-                // 🚀 PITCH UNIT CORRECTION: AVAudioUnitTimePitch handles transformations measured in cents.
-                // 1 Semitone is equivalent to 100 cents.
                 let pitchValue = Float(semitones * 100)
                 if self.cachedPitchShift != pitchValue {
                     self.cachedPitchShift = pitchValue
@@ -172,13 +208,24 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     private func toggleHardwareMicMonitor(enabled: Bool) {
         if currentMicMonitorState == enabled { return }
+        
+        // Track if this is the very first time this function is firing (cold start)
+        let isInitialSetup = (currentMicMonitorState == nil)
         currentMicMonitorState = enabled
         
-        // 🚀 SANDBOX DEFENSE GATING: Avoid making requests to an unentitled inputNode on a sandboxed Mac environment
         #if os(macOS)
         micMonitorMixer.volume = 0.0
         return
         #else
+        
+        // 🚀 FIX: If this is the cold-start pass and monitoring is disabled,
+        // exit immediately WITHOUT accessing audioEngine.inputNode.
+        // This protects the audio graph from breaking right before playback.
+        guard !isInitialSetup || enabled else {
+            micMonitorMixer.volume = 0.0
+            return
+        }
+        
         let inputNode = audioEngine.inputNode
         audioEngine.disconnectNodeOutput(inputNode)
         
@@ -198,23 +245,26 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     func play(trackName: String, using settings: FlowSettings) {
-        observeEngineSettings(using: settings)
-        
         let formattedTrackName = (trackName.hasSuffix(".mp3") || trackName.hasSuffix(".m4a")) ? trackName : "\(trackName).mp3"
+        let now = Date()
+        
+        // HARDWARE RE-ENTRANCY FIREWALL LOCK
+        if now.timeIntervalSince(lastSchedulingPassTimestamp) < 0.40 {
+            print("📝 [Hardware Firewall] Duplicate play command rejected.")
+            return
+        }
         
         if isPlaying && activeTrackTitle == formattedTrackName {
             return
         }
         
-        let now = Date()
-        if now.timeIntervalSince(lastPlayTime) < 0.2 {
-            return
-        }
+        lastSchedulingPassTimestamp = now
         lastPlayTime = now
         
         if isPlaying { stop() }
         
-        // Dynamic path checking rules map safely to locate internal bundles or local document containers
+        observeEngineSettings(using: settings)
+        
         let cleanInputName = trackName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         let factoryNames = ["Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch", "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"]
         let isStrictFactoryAsset = factoryNames.contains { $0.lowercased() == cleanInputName.lowercased() }
@@ -236,84 +286,119 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         self.seekSampleOffset = 0.0
         
         if !useFallbackEngine {
-            do {
-                isResettingEngine = true
-                playerNodeA.stop()
-                
-                let audioFile = try AVAudioFile(forReading: url)
-                
-                guard audioFile.length > 1000 else {
-                    throw NSError(domain: "com.freeflow.audio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid file bounds"])
+            if !ensureEngineRunning() {
+                useFallbackEngine = true
+                playFallback(url: url, trackName: formattedTrackName, settings: settings)
+                return
+            }
+            playAdvanced(url: url, trackName: formattedTrackName, settings: settings)
+        } else {
+            playFallback(url: url, trackName: formattedTrackName, settings: settings)
+        }
+    }
+    
+    private func playAdvanced(url: URL, trackName: String, settings: FlowSettings) {
+        do {
+            isResettingEngine = true
+            playerNodeA.stop()
+            playerNodeA.reset()
+            
+            self.seekSampleOffset = 0.0
+            self.currentProgressPosition = 0.0
+            self.hasAssignedSampleAnchor = false
+            self.systemStartSampleTime = 0
+            self.trackLoopCounter += 1
+            
+            let audioFile = try AVAudioFile(forReading: url)
+            guard audioFile.length > 1000 else {
+                throw NSError(domain: "com.freeflow.audio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid file bounds"])
+            }
+            
+            self.audioSampleRate = audioFile.processingFormat.sampleRate
+            self.audioTotalFrames = AVAudioFrameCount(audioFile.length)
+            self.activeTrackDuration = Double(audioFile.length) / audioSampleRate
+            
+            cachedPlaybackRate = Float(settings.playbackSpeed)
+            cachedPitchShift = Float(settings.pitchShiftSemitones * 100)
+            
+            timePitchNodeA.rate = 1.0
+            timePitchNodeA.pitch = 0.0
+            mixerA.volume = masterVolume
+            
+            playerNodeA.prepare(withFrameCount: audioTotalFrames)
+            scheduleStandardFilePlayback(audioFile, settings: settings)
+            
+            // INSULATE AUDIO LAYER BY PRE-STARTING GRAPH MANUALLY ON COLD INITIALIZATION PASS
+            var engineHadToStart = false
+            if !audioEngine.isRunning {
+                audioEngine.prepare()
+                try audioEngine.start()
+                engineHadToStart = true
+            }
+            
+            isResettingEngine = false
+            self.isPlaying = true
+            self.activeTrackTitle = trackName
+            
+            let sessionID = UUID()
+            self.playSessionID = sessionID
+            
+            // CRITICAL iOS HARDWARE COLD BOOT SYNCHRONIZATION OVERRIDE FENCE
+            // Introduces a tiny 20ms execution buffer *only* if the engine had to wake up from an idle state.
+            // This guarantees the hardware output channels are active before writing data frames.
+            if engineHadToStart {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self] in
+                    guard let self = self, self.isPlaying, self.playSessionID == sessionID else { return }
+                    self.playerNodeA.play(at: nil)
+                    self.consecutiveFailureCount = 0
+                    
+                    self.timePitchNodeA.rate = self.cachedPlaybackRate
+                    self.timePitchNodeA.pitch = self.cachedPitchShift
                 }
-                
-                self.audioSampleRate = audioFile.processingFormat.sampleRate
-                self.audioTotalFrames = AVAudioFrameCount(audioFile.length)
-                self.activeTrackDuration = Double(audioFile.length) / audioSampleRate
-                self.currentProgressPosition = 0.0
-                
-                // 🚀 STABLE CONNECTIVITY PIPELINE FLOW:
-                // We keep the static node structures continuously running, which clears layout faults.
-                if !audioEngine.isRunning {
-                    audioEngine.prepare()
-                    try audioEngine.start()
-                }
-                
-                cachedPlaybackRate = Float(settings.playbackSpeed)
-                cachedPitchShift = Float(settings.pitchShiftSemitones * 100)
-                
-                timePitchNodeA.rate = 1.0
-                timePitchNodeA.pitch = 0.0
-                mixerA.volume = masterVolume
-                
-                playerNodeA.prepare(withFrameCount: audioTotalFrames)
-                scheduleStandardFilePlayback(audioFile, settings: settings)
-                
-                isResettingEngine = false
-                self.isPlaying = true
-                self.activeTrackTitle = formattedTrackName
-                
-                // Explicit nil frame declaration sets the hardware device time baseline up correctly
+            } else {
                 self.playerNodeA.play(at: nil)
                 self.consecutiveFailureCount = 0
-                self.startProgressTrackingTimer()
                 
-                // Apply the scale configurations asynchronously after the timeline opens up smoothly
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                     guard let self = self, self.isPlaying, !self.isResettingEngine else { return }
                     self.timePitchNodeA.rate = self.cachedPlaybackRate
                     self.timePitchNodeA.pitch = self.cachedPitchShift
                 }
-                
-                print("🔊 [AudioManager] Pro Audio Engine streaming locked & active: \(formattedTrackName)")
-                return
-            } catch {
-                isResettingEngine = false
             }
+            
+            print("🔊 [AudioManager] Pro Audio Engine streaming locked & active: \(trackName)")
+        } catch {
+            isResettingEngine = false
+            useFallbackEngine = true
+            playFallback(url: url, trackName: trackName, settings: settings)
         }
-        
-        // FALLBACK STREAM SYSTEM
+    }
+    
+    private func playFallback(url: URL, trackName: String, settings: FlowSettings) {
         do {
-            self.useFallbackEngine = true
             fallbackPlayerA = try AVAudioPlayer(contentsOf: url)
             fallbackPlayerA?.delegate = self
             fallbackPlayerA?.volume = masterVolume
             fallbackPlayerA?.numberOfLoops = (settings.endBehavior == .loopTrack) ? -1 : 0
-            
             fallbackPlayerA?.enableRate = true
             fallbackPlayerA?.rate = Float(settings.playbackSpeed)
             
+            self.currentProgressPosition = 0.0
+            fallbackPlayerA?.currentTime = 0.0
             fallbackPlayerA?.prepareToPlay()
             
             self.activeTrackDuration = fallbackPlayerA?.duration ?? 0.0
-            self.currentProgressPosition = 0.0
+            self.trackLoopCounter += 1
             
             let success = fallbackPlayerA?.play() ?? false
             if success {
                 isPlaying = true
-                activeTrackTitle = formattedTrackName
+                activeTrackTitle = trackName
                 consecutiveFailureCount = 0
-                self.startProgressTrackingTimer()
-                print("🔊 [AudioManager] Fallback Audio Engine locked & active: \(formattedTrackName)")
+                
+                let sessionID = UUID()
+                self.playSessionID = sessionID
+                print("🔊 [AudioManager] Fallback Audio Engine locked & active: \(trackName)")
             } else {
                 handleTrackPlaybackFailure()
             }
@@ -341,6 +426,10 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         guard isPlaying && !isResettingEngine && !isSeekingTimeline else { return }
         
         self.seekSampleOffset = 0.0
+        self.hasAssignedSampleAnchor = false
+        self.systemStartSampleTime = 0
+        self.trackLoopCounter += 1
+        
         playerNodeA.prepare(withFrameCount: AVAudioFrameCount(file.length))
         
         playerNodeA.scheduleFile(file, at: nil, completionCallbackType: .dataRendered) { [weak self] _ in
@@ -362,16 +451,12 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let targetTime = percentage * activeTrackDuration
         
         self.isSeekingTimeline = true
-        stopTrackingTimer()
-        
         self.currentProgressPosition = targetTime
         
         if useFallbackEngine {
             fallbackPlayerA?.currentTime = targetTime
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 self.isSeekingTimeline = false
-                if self.isPlaying { self.startProgressTrackingTimer() }
             }
         } else {
             guard let settings = settingsReference else {
@@ -380,6 +465,12 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             }
             let playingStateBuffer = isPlaying
             playerNodeA.stop()
+            playerNodeA.reset()
+            
+            self.hasAssignedSampleAnchor = false
+            self.systemStartSampleTime = 0
+            
+            if !audioEngine.isRunning { try? audioEngine.start() }
             
             let cleanInputName = activeTrackTitle.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
             let factoryNames = ["Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch", "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"]
@@ -419,15 +510,13 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 }
                 
                 if playingStateBuffer {
+                    if !audioEngine.isRunning { try? audioEngine.start() }
                     playerNodeA.play(at: nil)
                 }
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                     guard let self = self else { return }
                     self.isSeekingTimeline = false
-                    if playingStateBuffer {
-                        self.startProgressTrackingTimer()
-                    }
                 }
             } else {
                 self.isSeekingTimeline = false
@@ -436,36 +525,34 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
     
-    private func startProgressTrackingTimer() {
-        stopTrackingTimer()
-        trackingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            DispatchQueue.main.async {
-                guard self.isPlaying && !self.isSeekingTimeline else { return }
-                
-                if self.useFallbackEngine {
-                    self.currentProgressPosition = self.fallbackPlayerA?.currentTime ?? 0.0
-                } else {
-                    if let nodeTime = self.playerNodeA.lastRenderTime {
-                        guard nodeTime.isSampleTimeValid || nodeTime.isHostTimeValid else { return }
-                        
-                        if let playerTime = self.playerNodeA.playerTime(forNodeTime: nodeTime) {
-                            let currentSamplePosition = (Double(playerTime.sampleTime) / playerTime.sampleRate) + self.seekSampleOffset
-                            
-                            if self.activeTrackDuration > 0 {
-                                self.currentProgressPosition = currentSamplePosition.truncatingRemainder(dividingBy: self.activeTrackDuration)
-                            }
-                        }
-                    }
-                }
-            }
+    func queryCalculatedTimelineProgressPosition() -> TimeInterval {
+        if !isPlaying { return 0.0 }
+        if isSeekingTimeline { return currentProgressPosition }
+        
+        if useFallbackEngine {
+            return fallbackPlayerA?.currentTime ?? 0.0
         }
-    }
-    
-    private func stopTrackingTimer() {
-        trackingTimer?.invalidate()
-        trackingTimer = nil
+        
+        guard let nodeTime = playerNodeA.lastRenderTime,
+              nodeTime.isSampleTimeValid,
+              let playerTime = playerNodeA.playerTime(forNodeTime: nodeTime) else {
+            return currentProgressPosition
+        }
+        
+        let sampleTime = playerTime.sampleTime
+        if !hasAssignedSampleAnchor {
+            systemStartSampleTime = sampleTime
+            hasAssignedSampleAnchor = true
+        }
+        
+        let sessionDeltaFrames = sampleTime - systemStartSampleTime
+        guard sessionDeltaFrames >= 0 else { return currentProgressPosition }
+        
+        let currentSamplePosition = (Double(sessionDeltaFrames) / playerTime.sampleRate) + seekSampleOffset
+        if activeTrackDuration > 0 {
+            return currentSamplePosition.truncatingRemainder(dividingBy: activeTrackDuration)
+        }
+        return currentProgressPosition
     }
     
     func deleteCustomTrackStateCleanup(fileName: String) {
@@ -479,20 +566,23 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         isPlaying = false
         isSeekingTimeline = false
         seekSampleOffset = 0.0
-        stopTrackingTimer()
+        hasAssignedSampleAnchor = false
+        systemStartSampleTime = 0
         if useFallbackEngine {
             fallbackPlayerA?.stop()
             fallbackPlayerB?.stop()
             fallbackPlayerA = nil
             fallbackPlayerB = nil
         } else {
-            // Removing node reset calls preserves configuration attributes across consecutive track transformations
             playerNodeA.stop()
+            playerNodeA.reset()
         }
         activeTrackTitle = ""
         currentProgressPosition = 0.0
         activeTrackDuration = 0.0
         isResettingEngine = false
+        playSessionID = nil
+        trackLoopCounter += 1
     }
     
     private func handleTrackPlaybackCompletion() {
@@ -526,8 +616,15 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private func advanceToNextTrack() {
         guard let settings = settingsReference, !isResettingEngine, !isSeekingTimeline else { return }
         
+        self.seekSampleOffset = 0.0
+        self.currentProgressPosition = 0.0
+        self.hasAssignedSampleAnchor = false
+        self.systemStartSampleTime = 0
+        self.trackLoopCounter += 1
+        
         if !useFallbackEngine {
             playerNodeA.stop()
+            playerNodeA.reset()
         }
         
         let currentSearchName = activeTrackTitle.isEmpty ? settings.selectedTrack : activeTrackTitle
@@ -570,6 +667,3 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 }
-
-
-

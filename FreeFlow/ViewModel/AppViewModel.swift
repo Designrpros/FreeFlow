@@ -28,9 +28,12 @@ final class AppViewModel: ObservableObject {
 
     init() {}
     
-    // 🚀 NEW ECOSYSTEM INITIALIZATION MECHANISM: Pre-warms components while your splash displays
+    // 🚀 ECOSYSTEM INITIALIZATION MECHANISM: Pre-warms components while splash displays
     @MainActor
     func prepareAppEcosystem(settings: FlowSettings) async {
+        // 0. Activate audio engine so it's fully ready before any playback
+        AudioManager.shared.prepareEngine()
+        
         // 1. Synchronously compile available tracks inside document rosters
         settings.refreshTracksRoster()
         

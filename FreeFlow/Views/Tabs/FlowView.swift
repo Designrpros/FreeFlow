@@ -16,6 +16,7 @@ struct FlowView: View {
 
     @State private var isScrubbing: Bool = false
     @State private var localScrubValue: Double = 0.0
+    @State private var scrubTrackID: String = ""
 
     init() {
         _vm = StateObject(wrappedValue: FlowViewModel())
@@ -41,23 +42,19 @@ struct FlowView: View {
 
     private var isCurrentTrackLocallyReady: Bool {
         let currentTrackName = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
-        
         let cleanCurrentName = currentTrackName.replacingOccurrences(of: ".mp3", with: "")
                                               .replacingOccurrences(of: ".m4a", with: "")
                                               .lowercased()
-        
         let isFactoryAsset = settings.factoryTracks.contains { factoryTrack in
             let cleanFactoryName = factoryTrack.replacingOccurrences(of: ".mp3", with: "")
                                                .replacingOccurrences(of: ".m4a", with: "")
                                                .lowercased()
             return cleanFactoryName == cleanCurrentName
         }
-        
         if isFactoryAsset { return true }
         return LocalStorageManager.shared.isLocalFileReady(fileName: currentTrackName)
     }
 
-    // 🚀 FIXED: Helper handles text mutations to dynamically strip file extensions before displaying the layout
     private var cleanDisplayTrackTitle: String {
         let rawTrack = audioManager.isPlaying ? audioManager.activeTrackTitle : settings.selectedTrack
         return rawTrack.replacingOccurrences(of: ".mp3", with: "")
@@ -124,38 +121,54 @@ struct FlowView: View {
             // TIMELINE TIMESTAMP PROGRESS CONTROL MODULE CARD
             if audioManager.activeTrackDuration > 0 {
                 VStack(spacing: 4) {
-                    Slider(
-                        value: Binding(
-                            get: {
-                                if isScrubbing { return localScrubValue }
-                                guard audioManager.activeTrackDuration > 0 else { return 0.0 }
-                                return audioManager.currentProgressPosition / audioManager.activeTrackDuration
-                            },
-                            set: { newValue in
-                                if !isScrubbing { isScrubbing = true }
-                                localScrubValue = newValue
+                    TimelineView(.animation(minimumInterval: 0.05, paused: !audioManager.isPlaying)) { context in
+                        let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
+                        
+                        VStack(spacing: 4) {
+                            Slider(
+                                value: Binding(
+                                    get: {
+                                        if isScrubbing { return localScrubValue }
+                                        guard audioManager.activeTrackDuration > 0 else { return 0.0 }
+                                        return activePosition / audioManager.activeTrackDuration
+                                    },
+                                    set: { newValue in
+                                        if !isScrubbing {
+                                            isScrubbing = true
+                                            scrubTrackID = audioManager.activeTrackTitle
+                                        }
+                                        localScrubValue = newValue
+                                    }
+                                ),
+                                in: 0.0...1.0,
+                                onEditingChanged: { editing in
+                                    if !editing {
+                                        if scrubTrackID == audioManager.activeTrackTitle {
+                                            audioManager.seekToProgressPercentage(localScrubValue)
+                                        } else {
+                                            localScrubValue = 0.0
+                                        }
+                                        
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            self.isScrubbing = false
+                                        }
+                                    }
+                                }
+                            )
+                            .tint(settings.appAccent.color)
+                            .controlSize(.small)
+                            .padding(.horizontal, 32)
+                            
+                            HStack {
+                                Text(formatTimeLabel(isScrubbing ? (localScrubValue * audioManager.activeTrackDuration) : activePosition))
+                                Spacer()
+                                Text(formatTimeLabel(audioManager.activeTrackDuration))
                             }
-                        ),
-                        in: 0.0...1.0,
-                        onEditingChanged: { editing in
-                            if !editing {
-                                audioManager.seekToProgressPercentage(localScrubValue)
-                                isScrubbing = false
-                            }
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(contentColor.opacity(0.4))
+                            .padding(.horizontal, 36)
                         }
-                    )
-                    .tint(settings.appAccent.color)
-                    .controlSize(.small)
-                    .padding(.horizontal, 32)
-                    
-                    HStack {
-                        Text(formatTimeLabel(isScrubbing ? (localScrubValue * audioManager.activeTrackDuration) : audioManager.currentProgressPosition))
-                        Spacer()
-                        Text(formatTimeLabel(audioManager.activeTrackDuration))
                     }
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(contentColor.opacity(0.4))
-                    .padding(.horizontal, 36)
                 }
                 .padding(.bottom, 12)
                 .transition(.opacity)
@@ -179,25 +192,29 @@ struct FlowView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: settings.appAccent.color))
                                 .frame(width: 48, height: 32)
                         } else {
-                            LiveAudioWaveformView(
-                                isPlaying: audioManager.isPlaying,
-                                isSeeking: audioManager.isSeekingTimeline
-                            )
-                            .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
+                            // UI WAVEFORM SYSTEM LEAVE ENTIRELY ACTIVE UNTOUCHED AS MANDATED
+                            Button {
+                                let isCurrentlyPlaying = audioManager.isPlaying
+                                let activeTrack = settings.selectedTrack
+                                
+                                if isCurrentlyPlaying {
+                                    audioManager.stop()
+                                } else if isCurrentTrackLocallyReady {
+                                    audioManager.play(trackName: activeTrack, using: settings)
+                                } else {
+                                    settings.downloadCloudTrackOnDemand(activeTrack)
+                                }
+                            } label: {
+                                LiveAudioWaveformView(
+                                    isPlaying: audioManager.isPlaying,
+                                    isSeeking: audioManager.isSeekingTimeline
+                                )
+                                .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .frame(width: 60, height: 40)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        let activeTrack = settings.selectedTrack
-                        if audioManager.isPlaying {
-                            audioManager.stop()
-                        } else if isCurrentTrackLocallyReady {
-                            audioManager.play(trackName: activeTrack, using: settings)
-                        } else {
-                            settings.downloadCloudTrackOnDemand(activeTrack)
-                        }
-                    }
                     
                     Button {
                         navigateTrack(forward: true)
@@ -221,7 +238,6 @@ struct FlowView: View {
                     .foregroundColor(audioManager.isPlaying || !isCurrentTrackLocallyReady ? settings.appAccent.color.opacity(0.8) : contentColor.opacity(0.4))
                     
                     VStack(spacing: 2) {
-                        // 🚀 FIXED: Displays clean display string without file extension types
                         Text(cleanDisplayTrackTitle)
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(contentColor)
@@ -240,12 +256,22 @@ struct FlowView: View {
         .onDisappear { vm.terminateEcosystemEngine() }
         .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
         
-        .onChange(of: settings.numberOfWords) { oldValue, newValue in
+        .onChange(of: settings.numberOfWords) { _, _ in
             vm.refresh(using: settings)
         }
-        
-        .onChange(of: settings.freestyleMode) { oldValue, newValue in
+        .onChange(of: settings.freestyleMode) { _, _ in
             vm.refresh(using: settings)
+        }
+        // DEPRECATION-FREE iOS 17 CLOSED CLOSURE BLOCK OBSERVERS
+        .onChange(of: audioManager.activeTrackTitle) { _, newValue in
+            isScrubbing = false
+            localScrubValue = 0.0
+            scrubTrackID = newValue
+        }
+        .onChange(of: audioManager.trackLoopCounter) { _, _ in
+            isScrubbing = false
+            localScrubValue = 0.0
+            scrubTrackID = audioManager.activeTrackTitle
         }
     }
     
@@ -257,7 +283,6 @@ struct FlowView: View {
             let cleanTrack = track.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
             return cleanTrack == cleanCurrent
         })
-        
         return index ?? 0
     }
     
@@ -266,10 +291,15 @@ struct FlowView: View {
         guard totalTracks > 0 else { return }
         
         let newIndex = forward ? (currentTrackIndex + 1) % totalTracks : (currentTrackIndex - 1 + totalTracks) % totalTracks
-        
         if settings.instrumentalBackingTracks.indices.contains(newIndex) {
             let nextTrackName = settings.instrumentalBackingTracks[newIndex]
+            
+            isScrubbing = false
+            localScrubValue = 0.0
+            scrubTrackID = nextTrackName
+            
             settings.selectedTrack = nextTrackName
+            audioManager.currentProgressPosition = 0.0
             
             if !settings.factoryTracks.contains(nextTrackName) && !LocalStorageManager.shared.isLocalFileReady(fileName: nextTrackName) {
                 audioManager.stop()

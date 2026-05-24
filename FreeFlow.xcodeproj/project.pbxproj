@@ -26,7 +26,6 @@
 /* Begin PBXFileReference section */
 		AD014A592FBDA3C50031DD16 /* FreeFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FreeFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD023BA72FBF50970096AF08 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		AD13E9962FC05045008FEE3E /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		AD13E9982FC05046008FEE3E /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -83,7 +82,6 @@
 		AD13E9952FC05045008FEE3E /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				AD13E9962FC05045008FEE3E /* WidgetKit.framework */,
 				AD13E9982FC05046008FEE3E /* SwiftUI.framework */,
 			);
 			name = Frameworks;
