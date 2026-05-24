@@ -39,8 +39,9 @@ struct NotepadView: View {
         settings.canvasColor.backgroundColor(isDark: isDarkMode)
     }
     
+    // 🚀 FIX: Map the sidebar background directly to match the main canvas theme color
     private var sidebarBackground: Color {
-        isDarkMode ? Color.black.opacity(0.15) : Color.black.opacity(0.03)
+        workspaceBackground
     }
     
     private var mainTextColor: Color {
@@ -80,6 +81,7 @@ struct NotepadView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            // 🚀 FIX: Applies background color mapping seamlessly behind invisible list cells
             .background(sidebarBackground)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
             .navigationTitle("My Sheets")
@@ -192,7 +194,7 @@ struct NotepadView: View {
         return selectedNote?.objectID == note.objectID
     }
     
-    // 🚀 FIXED THROTTLED PIPELINE: Captures keyboard entries and commits to SQLite only after you pause typing for 1.5 seconds.
+    // FIXED THROTTLED PIPELINE: Captures keyboard entries and commits to SQLite only after you pause typing for 1.5 seconds.
     // This stops background worker threads from crashing or causing playback glitching stutters.
     private func setupDebouncedSavePipeline() {
         saveCancellable = textDebounceSubject

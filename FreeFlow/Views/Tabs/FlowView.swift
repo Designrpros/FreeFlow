@@ -185,6 +185,8 @@ struct FlowView: View {
                             .foregroundColor(contentColor.opacity(0.6))
                     }
                     .buttonStyle(.plain)
+                    // 🚀 macOS Shortcut: Command + Left Arrow navigates to the previous track
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
                     
                     VStack(spacing: 0) {
                         if !isCurrentTrackLocallyReady && settings.trackDownloadStates[settings.selectedTrack] == .downloading {
@@ -212,6 +214,8 @@ struct FlowView: View {
                                 .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
                             }
                             .buttonStyle(.plain)
+                            // 🚀 macOS Shortcut: Spacebar toggles standard playback inside active layout focus
+                            .keyboardShortcut(.space, modifiers: [])
                         }
                     }
                     .frame(width: 60, height: 40)
@@ -224,6 +228,8 @@ struct FlowView: View {
                             .foregroundColor(contentColor.opacity(0.6))
                     }
                     .buttonStyle(.plain)
+                    // 🚀 macOS Shortcut: Command + Right Arrow skips forward to the next track
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
                 }
                 
                 VStack(spacing: 6) {

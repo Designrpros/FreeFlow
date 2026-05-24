@@ -8,6 +8,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import MediaPlayer
 
 final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = AudioManager()
@@ -84,6 +85,9 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         // 2. Build the engine graph (do NOT start yet)
         setupAudioEngineGraph()
+        
+        // 3. Register native background command bindings (F7 / F8 / F9 Support)
+        setupRemoteCommandCenter()
     }
     
     // Call this once from the splash screen to warm up the engine
@@ -173,11 +177,13 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 if self.useFallbackEngine {
                     if self.fallbackPlayerA?.rate != rateValue {
                         self.fallbackPlayerA?.rate = rateValue
+                        self.updateNowPlayingPlaybackState(isPlaying: self.isPlaying)
                     }
                 } else {
                     if self.cachedPlaybackRate != rateValue {
                         self.cachedPlaybackRate = rateValue
                         self.timePitchNodeA.rate = rateValue
+                        self.updateNowPlayingPlaybackState(isPlaying: self.isPlaying)
                     }
                 }
             }
@@ -209,7 +215,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private func toggleHardwareMicMonitor(enabled: Bool) {
         if currentMicMonitorState == enabled { return }
         
-        // Track if this is the very first time this function is firing (cold start)
         let isInitialSetup = (currentMicMonitorState == nil)
         currentMicMonitorState = enabled
         
@@ -218,9 +223,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         return
         #else
         
-        // 🚀 FIX: If this is the cold-start pass and monitoring is disabled,
-        // exit immediately WITHOUT accessing audioEngine.inputNode.
-        // This protects the audio graph from breaking right before playback.
         guard !isInitialSetup || enabled else {
             micMonitorMixer.volume = 0.0
             return
@@ -248,7 +250,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         let formattedTrackName = (trackName.hasSuffix(".mp3") || trackName.hasSuffix(".m4a")) ? trackName : "\(trackName).mp3"
         let now = Date()
         
-        // HARDWARE RE-ENTRANCY FIREWALL LOCK
         if now.timeIntervalSince(lastSchedulingPassTimestamp) < 0.40 {
             print("📝 [Hardware Firewall] Duplicate play command rejected.")
             return
@@ -328,7 +329,6 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             playerNodeA.prepare(withFrameCount: audioTotalFrames)
             scheduleStandardFilePlayback(audioFile, settings: settings)
             
-            // INSULATE AUDIO LAYER BY PRE-STARTING GRAPH MANUALLY ON COLD INITIALIZATION PASS
             var engineHadToStart = false
             if !audioEngine.isRunning {
                 audioEngine.prepare()
@@ -340,12 +340,11 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             self.isPlaying = true
             self.activeTrackTitle = trackName
             
+            self.synchronizeNowPlayingMetadata(title: trackName, duration: self.activeTrackDuration, isPlaying: true)
+            
             let sessionID = UUID()
             self.playSessionID = sessionID
             
-            // CRITICAL iOS HARDWARE COLD BOOT SYNCHRONIZATION OVERRIDE FENCE
-            // Introduces a tiny 20ms execution buffer *only* if the engine had to wake up from an idle state.
-            // This guarantees the hardware output channels are active before writing data frames.
             if engineHadToStart {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self] in
                     guard let self = self, self.isPlaying, self.playSessionID == sessionID else { return }
@@ -396,6 +395,8 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 activeTrackTitle = trackName
                 consecutiveFailureCount = 0
                 
+                self.synchronizeNowPlayingMetadata(title: trackName, duration: self.activeTrackDuration, isPlaying: true)
+                
                 let sessionID = UUID()
                 self.playSessionID = sessionID
                 print("🔊 [AudioManager] Fallback Audio Engine locked & active: \(trackName)")
@@ -430,6 +431,8 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         self.systemStartSampleTime = 0
         self.trackLoopCounter += 1
         
+        self.synchronizeNowPlayingMetadata(title: self.activeTrackTitle, duration: self.activeTrackDuration, isPlaying: true)
+        
         playerNodeA.prepare(withFrameCount: AVAudioFrameCount(file.length))
         
         playerNodeA.scheduleFile(file, at: nil, completionCallbackType: .dataRendered) { [weak self] _ in
@@ -455,6 +458,7 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         if useFallbackEngine {
             fallbackPlayerA?.currentTime = targetTime
+            self.updateNowPlayingPlaybackState(isPlaying: self.isPlaying)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 self.isSeekingTimeline = false
             }
@@ -513,6 +517,8 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                     if !audioEngine.isRunning { try? audioEngine.start() }
                     playerNodeA.play(at: nil)
                 }
+                
+                self.updateNowPlayingPlaybackState(isPlaying: playingStateBuffer)
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                     guard let self = self else { return }
@@ -583,10 +589,25 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         isResettingEngine = false
         playSessionID = nil
         trackLoopCounter += 1
+        
+        self.updateNowPlayingPlaybackState(isPlaying: false)
     }
     
     private func handleTrackPlaybackCompletion() {
         guard let settings = settingsReference, isPlaying, !isResettingEngine, !isSeekingTimeline else { return }
+        
+        // 🚀 FIX: Isolate freestyle recording takes from backing instrumentals.
+        // If a recorded capture take finishes, loop it or stop cleanly rather than falling back to the FlowView playlist.
+        let isRecording = activeTrackTitle.hasPrefix("FreeFlow_Session_") || activeTrackTitle.hasSuffix(".m4a")
+        if isRecording {
+            switch settings.endBehavior {
+            case .loopTrack:
+                self.play(trackName: activeTrackTitle, using: settings)
+            case .nextTrack:
+                self.stop()
+            }
+            return
+        }
         
         switch settings.endBehavior {
         case .loopTrack:
@@ -609,6 +630,50 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if settings.endBehavior == .nextTrack {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.advanceToNextTrack()
+            }
+        }
+    }
+    
+    private func advanceToPreviousTrack() {
+        guard let settings = settingsReference, !isResettingEngine, !isSeekingTimeline else { return }
+        
+        self.seekSampleOffset = 0.0
+        self.currentProgressPosition = 0.0
+        self.hasAssignedSampleAnchor = false
+        self.systemStartSampleTime = 0
+        self.trackLoopCounter += 1
+        
+        if !useFallbackEngine {
+            playerNodeA.stop()
+            playerNodeA.reset()
+        }
+        
+        let currentSearchName = activeTrackTitle.isEmpty ? settings.selectedTrack : activeTrackTitle
+        let cleanSearchName = currentSearchName.replacingOccurrences(of: ".mp3", with: "")
+                                                .replacingOccurrences(of: ".m4a", with: "")
+                                                .lowercased()
+        
+        if let currentIndex = settings.instrumentalBackingTracks.firstIndex(where: { track in
+            let cleanTrackName = track.replacingOccurrences(of: ".mp3", with: "")
+                                      .replacingOccurrences(of: ".m4a", with: "")
+                                      .lowercased()
+            return cleanTrackName == cleanSearchName
+        }) {
+            let totalTracks = settings.instrumentalBackingTracks.count
+            let prevIndex = (currentIndex - 1 + totalTracks) % totalTracks
+            let prevTrackName = settings.instrumentalBackingTracks[prevIndex]
+            
+            DispatchQueue.main.async {
+                settings.selectedTrack = prevTrackName
+                self.play(trackName: prevTrackName, using: settings)
+            }
+        } else {
+            if !settings.instrumentalBackingTracks.isEmpty {
+                let fallbackTrack = settings.instrumentalBackingTracks[0]
+                DispatchQueue.main.async {
+                    settings.selectedTrack = fallbackTrack
+                    self.play(trackName: fallbackTrack, using: settings)
+                }
             }
         }
     }
@@ -654,6 +719,88 @@ final class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 }
             }
         }
+    }
+    
+    // MARK: - Native macOS Background Hardware Media Controls (F7 / F8 / F9 Interception)
+    
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+        
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        commandCenter.nextTrackCommand.isEnabled = true
+        commandCenter.previousTrackCommand.isEnabled = true
+        
+        commandCenter.playCommand.addTarget { [weak self] event in
+            guard let self = self, let settings = self.settingsReference else { return .noSuchContent }
+            if !self.isPlaying {
+                self.play(trackName: settings.selectedTrack, using: settings)
+                return .success
+            }
+            return .commandFailed
+        }
+        
+        commandCenter.pauseCommand.addTarget { [weak self] event in
+            guard let self = self else { return .noSuchContent }
+            if self.isPlaying {
+                self.stop()
+                return .success
+            }
+            return .commandFailed
+        }
+        
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] event in
+            guard let self = self, let settings = self.settingsReference else { return .noSuchContent }
+            if self.isPlaying {
+                self.stop()
+            } else {
+                self.play(trackName: settings.selectedTrack, using: settings)
+            }
+            return .success
+        }
+        
+        commandCenter.nextTrackCommand.addTarget { [weak self] event in
+            guard let self = self else { return .noSuchContent }
+            self.advanceToNextTrack()
+            return .success
+        }
+        
+        commandCenter.previousTrackCommand.addTarget { [weak self] event in
+            guard let self = self else { return .noSuchContent }
+            self.advanceToPreviousTrack()
+            return .success
+        }
+    }
+    
+    // MARK: - MPNowPlayingInfoCenter Synchronization Helpers
+    
+    private func synchronizeNowPlayingMetadata(title: String, duration: TimeInterval, isPlaying: Bool) {
+        let cleanTitle = title.replacingOccurrences(of: ".mp3", with: "")
+                              .replacingOccurrences(of: ".m4a", with: "")
+                              .replacingOccurrences(of: "_", with: " ")
+        
+        var nowPlayingInfo = [String: Any]()
+        nowPlayingInfo[MPMediaItemPropertyTitle] = cleanTitle
+        nowPlayingInfo[MPMediaItemPropertyArtist] = "FreeFlow"
+        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = duration
+        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = queryCalculatedTimelineProgressPosition()
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? cachedPlaybackRate : 0.0
+        
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    }
+    
+    private func updateNowPlayingPlaybackState(isPlaying: Bool) {
+        let elapsed = queryCalculatedTimelineProgressPosition()
+        
+        if var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo {
+            currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+            currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? cachedPlaybackRate : 0.0
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
+        }
+        
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : (elapsed > 0 ? .paused : .stopped)
     }
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

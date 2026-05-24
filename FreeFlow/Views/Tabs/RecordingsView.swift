@@ -24,6 +24,11 @@ struct RecordingsView: View {
     @State private var trackToRename: String? = nil
     @State private var newTrackName = ""
     
+    // 🚀 PROGRESS TIMELINE SYSTEM CONTROLS
+    @State private var isScrubbing: Bool = false
+    @State private var localScrubValue: Double = 0.0
+    @State private var scrubTrackID: String = ""
+    
     private var isDarkMode: Bool {
         if settings.appTheme == .system { return colorScheme == .dark }
         return settings.appTheme == .dark
@@ -70,65 +75,120 @@ struct RecordingsView: View {
                 List {
                     Section {
                         ForEach(recordedSessions, id: \.self) { filename in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(cleanDisplayName(for: filename))
-                                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                                        .foregroundColor(mainTextColor)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(cleanDisplayName(for: filename))
+                                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                                            .foregroundColor(mainTextColor)
+                                        
+                                        Group {
+                                            switch fileStates[filename] ?? .idle {
+                                            case .downloading:
+                                                Text("Downloading from iCloud Studio... • SYNCHRONIZING")
+                                                    .foregroundColor(settings.appAccent.color)
+                                            case .ready:
+                                                Text("Studio Session Asset • READY TO EXPORT")
+                                                    .foregroundColor(settings.appAccent.color.opacity(0.7))
+                                            case .idle:
+                                                Text("Studio Session Asset • AVAILABLE IN CLOUD")
+                                                    .foregroundColor(mainTextColor.opacity(0.4))
+                                            }
+                                        }
+                                        .font(.system(size: 10, design: .monospaced))
+                                    }
                                     
-                                    Group {
+                                    Spacer()
+                                    
+                                    HStack(spacing: 16) {
                                         switch fileStates[filename] ?? .idle {
                                         case .downloading:
-                                            Text("Downloading from iCloud Studio... • SYNCHRONIZING")
-                                                .foregroundColor(settings.appAccent.color)
-                                        case .ready:
-                                            Text("Studio Session Asset • READY TO EXPORT")
-                                                .foregroundColor(settings.appAccent.color.opacity(0.7))
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .frame(width: 20, height: 20)
+                                                
+                                        case .ready(let fileURL):
+                                            ShareLink(item: fileURL) {
+                                                Image(systemName: "square.and.arrow.up")
+                                                    .font(.system(size: 15))
+                                                    .foregroundColor(settings.appAccent.color)
+                                            }
+                                            .buttonStyle(.plain)
+                                            
                                         case .idle:
-                                            Text("Studio Session Asset • AVAILABLE IN CLOUD")
-                                                .foregroundColor(mainTextColor.opacity(0.4))
+                                            Button {
+                                                evaluateAndPrepareFile(filename: filename, playImmediately: false)
+                                            } label: {
+                                                Image(systemName: "icloud.and.arrow.down")
+                                                    .font(.system(size: 15))
+                                                    .foregroundColor(secondaryTextColor)
+                                            }
+                                            .buttonStyle(.plain)
                                         }
+                                        
+                                        Button {
+                                            handlePlaybackTap(for: filename)
+                                        } label: {
+                                            Image(systemName: isCurrentTrackPlaying(filename) ? "stop.circle.fill" : "play.circle.fill")
+                                                .font(.system(size: 22))
+                                                .foregroundColor(settings.appAccent.color)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .font(.system(size: 10, design: .monospaced))
                                 }
                                 
-                                Spacer()
-                                
-                                // 🚀 FIXED: Double curly brackets removed completely
-                                HStack(spacing: 16) {
-                                    switch fileStates[filename] ?? .idle {
-                                    case .downloading:
-                                        ProgressView()
-                                            .controlSize(.small)
-                                            .frame(width: 20, height: 20)
-                                            
-                                    case .ready(let fileURL):
-                                        ShareLink(item: fileURL) {
-                                            Image(systemName: "square.and.arrow.up")
-                                                .font(.system(size: 15))
-                                                .foregroundColor(settings.appAccent.color)
-                                        }
-                                        .buttonStyle(.plain)
+                                // 🚀 NEW FEATURE: Contextual Expandable Timeline Progress Slider Module
+                                if isCurrentTrackPlaying(filename) && audioManager.activeTrackDuration > 0 {
+                                    TimelineView(.animation(minimumInterval: 0.05, paused: !audioManager.isPlaying)) { context in
+                                        let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
                                         
-                                    case .idle:
-                                        Button {
-                                            evaluateAndPrepareFile(filename: filename, playImmediately: false)
-                                        } label: {
-                                            Image(systemName: "icloud.and.arrow.down")
-                                                .font(.system(size: 15))
-                                                .foregroundColor(secondaryTextColor)
+                                        VStack(spacing: 2) {
+                                            Slider(
+                                                value: Binding(
+                                                    get: {
+                                                        if isScrubbing { return localScrubValue }
+                                                        guard audioManager.activeTrackDuration > 0 else { return 0.0 }
+                                                        return activePosition / audioManager.activeTrackDuration
+                                                    },
+                                                    set: { newValue in
+                                                        if !isScrubbing {
+                                                            isScrubbing = true
+                                                            scrubTrackID = audioManager.activeTrackTitle
+                                                        }
+                                                        localScrubValue = newValue
+                                                    }
+                                                ),
+                                                in: 0.0...1.0,
+                                                onEditingChanged: { editing in
+                                                    if !editing {
+                                                        if scrubTrackID == audioManager.activeTrackTitle {
+                                                            audioManager.seekToProgressPercentage(localScrubValue)
+                                                        } else {
+                                                            localScrubValue = 0.0
+                                                        }
+                                                        
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                                            self.isScrubbing = false
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                            .tint(settings.appAccent.color)
+                                            .controlSize(.mini)
+                                            .padding(.horizontal, 4)
+                                            
+                                            HStack {
+                                                Text(formatTimeLabel(isScrubbing ? (localScrubValue * audioManager.activeTrackDuration) : activePosition))
+                                                Spacer()
+                                                Text(formatTimeLabel(audioManager.activeTrackDuration))
+                                            }
+                                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                            .foregroundColor(mainTextColor.opacity(0.4))
+                                            .padding(.horizontal, 6)
                                         }
-                                        .buttonStyle(.plain)
+                                        .padding(.top, 4)
+                                        .transition(.move(edge: .top).combined(with: .opacity))
                                     }
-                                    
-                                    Button {
-                                        handlePlaybackTap(for: filename)
-                                    } label: {
-                                        Image(systemName: isCurrentTrackPlaying(filename) ? "stop.circle.fill" : "play.circle.fill")
-                                            .font(.system(size: 22))
-                                            .foregroundColor(settings.appAccent.color)
-                                    }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -208,6 +268,17 @@ struct RecordingsView: View {
         } message: { filename in
             Text("Provide a clean studio identifier title for your saved performance take.")
         }
+        // 🚀 SYNC CONTROLLER CLAMP CLEANUPS
+        .onChange(of: audioManager.activeTrackTitle) { _, newValue in
+            isScrubbing = false
+            localScrubValue = 0.0
+            scrubTrackID = newValue
+        }
+        .onChange(of: audioManager.trackLoopCounter) { _, _ in
+            isScrubbing = false
+            localScrubValue = 0.0
+            scrubTrackID = audioManager.activeTrackTitle
+        }
     }
     
     private func checkInitialFileState(filename: String) {
@@ -219,7 +290,7 @@ struct RecordingsView: View {
         
         let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
         if let values = try? targetURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
-           values.ubiquitousItemDownloadingStatus == .current {
+          values.ubiquitousItemDownloadingStatus == .current {
             fileStates[filename] = .ready(targetURL)
         } else {
             fileStates[filename] = .idle
@@ -330,5 +401,12 @@ struct RecordingsView: View {
         fileStates[filename] = nil
         LocalStorageManager.shared.deletePhysicalFile(fileName: filename)
         settings.refreshTracksRoster()
+    }
+    
+    private func formatTimeLabel(_ time: TimeInterval) -> String {
+        guard !time.isNaN && !time.isInfinite && time > 0 else { return "0:00" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
