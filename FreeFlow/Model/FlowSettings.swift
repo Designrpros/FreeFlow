@@ -30,7 +30,6 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case system = "System"
     case light = "Light"
     case dark = "Dark"
-    
     var id: String { rawValue }
     
     var colorScheme: ColorScheme? {
@@ -48,14 +47,12 @@ enum CanvasColor: String, CaseIterable, Identifiable {
     case ember = "Ember"
     case oceanic = "Oceanic"
     case midnight = "Midnight"
-    
     var id: String { rawValue }
     
     func backgroundColor(isDark: Bool) -> Color {
         switch self {
         case .defaultGray: return isDark ? Color(white: 0.12) : Color(white: 0.95)
         case .monochrome:  return isDark ? Color(white: 0.05) : Color(white: 1.0)
-        // 🚀 FIXED: Fixed the color macro typo and ternary structure down here
         case .ember:       return isDark ? Color(red: 0.25, green: 0.11, blue: 0.04) : Color(red: 0.96, green: 0.91, blue: 0.86)
         case .oceanic:     return isDark ? Color(red: 0.09, green: 0.20, blue: 0.17) : Color(red: 0.88, green: 0.94, blue: 0.92)
         case .midnight:    return isDark ? Color(red: 0.10, green: 0.09, blue: 0.18) : Color(red: 0.91, green: 0.90, blue: 0.96)
@@ -168,8 +165,8 @@ final class FlowSettings: ObservableObject {
     init() {
         self.availableTracks = factoryTracks
         
-        let model = AppViewModel()
-        model.loadSavedSettings(into: self)
+        // ✅ FIXED: Routed parameters context through clear static utility functions
+        AppViewModel.loadSavedSettings(into: self)
         
         sanitizeSelectedTrackExtension()
         refreshTracksRoster()
@@ -182,16 +179,15 @@ final class FlowSettings: ObservableObject {
             .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                AppViewModel().saveSettings(from: self)
+                // ✅ FIXED: References data serializations strictly via static memory map spaces
+                AppViewModel.saveSettings(from: self)
             }
             .store(in: &cancellables)
     }
     
     private func sanitizeSelectedTrackExtension() {
         let trimmed = selectedTrack.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasSuffix(".mp3") || trimmed.hasSuffix(".m4a") {
-            return
-        }
+        if trimmed.hasSuffix(".mp3") || trimmed.hasSuffix(".m4a") { return }
         
         let lowercased = trimmed.lowercased()
         if lowercased.contains("chrome") { selectedTrack = "Chrome_On_The_Curb.mp3" }

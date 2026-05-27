@@ -29,6 +29,9 @@ struct RecordingsView: View {
     @State private var localScrubValue: Double = 0.0
     @State private var scrubTrackID: String = ""
     
+    // ✅ FIX: Cache sorted files to avoid running heavy synchronous disk lookups inside rendering loops
+    @State private var sortedSessionsCache: [String] = []
+    
     private var isDarkMode: Bool {
         if settings.appTheme == .system { return colorScheme == .dark }
         return settings.appTheme == .dark
@@ -37,26 +40,10 @@ struct RecordingsView: View {
     private var workspaceBackground: Color { settings.canvasColor.backgroundColor(isDark: isDarkMode) }
     private var mainTextColor: Color { isDarkMode ? .white : .black }
     private var cardBackground: Color { isDarkMode ? Color.white.opacity(0.04) : Color.black.opacity(0.03) }
-    
-    // Dynamic chronological resource sort maps latest file modifications to the top of the array stack
-    private var recordedSessions: [String] {
-        let files = settings.availableTracks.filter { $0.hasSuffix(".m4a") }
-        
-        return files.sorted { (file1, file2) -> Bool in
-            let url1 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file1)
-            let url2 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file2)
-            
-            let date1 = (try? url1.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
-            let date2 = (try? url2.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
-            
-            // Latest date bubble on top
-            return date1 > date2
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
-            if recordedSessions.isEmpty {
+            if sortedSessionsCache.isEmpty {
                 VStack(spacing: 12) {
                     Spacer()
                     Image(systemName: "mic.slash")
@@ -74,7 +61,7 @@ struct RecordingsView: View {
             } else {
                 List {
                     Section {
-                        ForEach(recordedSessions, id: \.self) { filename in
+                        ForEach(sortedSessionsCache, id: \.self) { filename in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -137,7 +124,6 @@ struct RecordingsView: View {
                                     }
                                 }
                                 
-                                // 🚀 NEW FEATURE: Contextual Expandable Timeline Progress Slider Module
                                 if isCurrentTrackPlaying(filename) && audioManager.activeTrackDuration > 0 {
                                     TimelineView(.animation(minimumInterval: 0.05, paused: !audioManager.isPlaying)) { context in
                                         let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
@@ -240,7 +226,7 @@ struct RecordingsView: View {
                             }
                         }
                     } header: {
-                        Text("Captured Studio Sessions (\(recordedSessions.count))")
+                        Text("Captured Studio Sessions (\(sortedSessionsCache.count))")
                             .font(.system(size: 11, weight: .bold))
                     }
                     .listRowBackground(cardBackground)
@@ -251,7 +237,11 @@ struct RecordingsView: View {
         }
         .background(workspaceBackground.ignoresSafeArea())
         .onAppear {
-            settings.refreshTracksRoster()
+            rebuildSortedSessionsCache()
+        }
+        // ✅ FIX: Automatically sync UI updates whenever files are loaded or removed on disk
+        .onChange(of: settings.availableTracks) { _, _ in
+            rebuildSortedSessionsCache()
         }
         .alert("Rename Session Sheet", isPresented: $showingRenameAlert, presenting: trackToRename) { filename in
             TextField("Enter session description...", text: $newTrackName)
@@ -268,7 +258,6 @@ struct RecordingsView: View {
         } message: { filename in
             Text("Provide a clean studio identifier title for your saved performance take.")
         }
-        // 🚀 SYNC CONTROLLER CLAMP CLEANUPS
         .onChange(of: audioManager.activeTrackTitle) { _, newValue in
             isScrubbing = false
             localScrubValue = 0.0
@@ -281,13 +270,27 @@ struct RecordingsView: View {
         }
     }
     
+    // ✅ FIX: Move synchronous disk access routines out of view tree getters into an explicit worker method
+    private func rebuildSortedSessionsCache() {
+        let files = settings.availableTracks.filter { $0.hasSuffix(".m4a") }
+        let sorted = files.sorted { (file1, file2) -> Bool in
+            let url1 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file1)
+            let url2 = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: file2)
+            let date1 = (try? url1.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
+            let date2 = (try? url2.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
+            return date1 > date2
+        }
+        withAnimation(.easeOut(duration: 0.15)) {
+            self.sortedSessionsCache = sorted
+        }
+    }
+    
     private func checkInitialFileState(filename: String) {
         if LocalStorageManager.shared.isLocalFileReady(fileName: filename) {
             let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
             fileStates[filename] = .ready(targetURL)
             return
         }
-        
         let targetURL = LocalStorageManager.shared.resolveAbsoluteLocalURL(for: filename)
         if let values = try? targetURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
           values.ubiquitousItemDownloadingStatus == .current {
@@ -302,7 +305,6 @@ struct RecordingsView: View {
             audioManager.stop()
             return
         }
-        
         if case .ready = fileStates[filename] {
             audioManager.play(trackName: filename, using: settings)
         } else {

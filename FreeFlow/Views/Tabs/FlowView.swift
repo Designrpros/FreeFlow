@@ -185,7 +185,6 @@ struct FlowView: View {
                             .foregroundColor(contentColor.opacity(0.6))
                     }
                     .buttonStyle(.plain)
-                    // 🚀 macOS Shortcut: Command + Left Arrow navigates to the previous track
                     .keyboardShortcut(.leftArrow, modifiers: .command)
                     
                     VStack(spacing: 0) {
@@ -194,18 +193,8 @@ struct FlowView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: settings.appAccent.color))
                                 .frame(width: 48, height: 32)
                         } else {
-                            // UI WAVEFORM SYSTEM LEAVE ENTIRELY ACTIVE UNTOUCHED AS MANDATED
                             Button {
-                                let isCurrentlyPlaying = audioManager.isPlaying
-                                let activeTrack = settings.selectedTrack
-                                
-                                if isCurrentlyPlaying {
-                                    audioManager.stop()
-                                } else if isCurrentTrackLocallyReady {
-                                    audioManager.play(trackName: activeTrack, using: settings)
-                                } else {
-                                    settings.downloadCloudTrackOnDemand(activeTrack)
-                                }
+                                togglePlaybackAction()
                             } label: {
                                 LiveAudioWaveformView(
                                     isPlaying: audioManager.isPlaying,
@@ -214,8 +203,6 @@ struct FlowView: View {
                                 .foregroundColor(audioManager.isPlaying ? settings.appAccent.color : Color(white: 0.5))
                             }
                             .buttonStyle(.plain)
-                            // 🚀 macOS Shortcut: Spacebar toggles standard playback inside active layout focus
-                            .keyboardShortcut(.space, modifiers: [])
                         }
                     }
                     .frame(width: 60, height: 40)
@@ -228,7 +215,6 @@ struct FlowView: View {
                             .foregroundColor(contentColor.opacity(0.6))
                     }
                     .buttonStyle(.plain)
-                    // 🚀 macOS Shortcut: Command + Right Arrow skips forward to the next track
                     .keyboardShortcut(.rightArrow, modifiers: .command)
                 }
                 
@@ -262,13 +248,25 @@ struct FlowView: View {
         .onDisappear { vm.terminateEcosystemEngine() }
         .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
         
+        // 🚀 FIX: Spacebar mapping is attached here to the background frame hierarchy instead of nested on the Button control itself.
+        // This decouples standard focus highlight parameters, preventing double actions.
+        .onReceive(Just(audioManager.isPlaying)) { _ in }
+        .background(
+            Button(action: {
+                togglePlaybackAction()
+            }) {
+                Color.clear
+            }
+            .keyboardShortcut(.space, modifiers: [])
+            .disabled(false)
+        )
+        
         .onChange(of: settings.numberOfWords) { _, _ in
             vm.refresh(using: settings)
         }
         .onChange(of: settings.freestyleMode) { _, _ in
             vm.refresh(using: settings)
         }
-        // DEPRECATION-FREE iOS 17 CLOSED CLOSURE BLOCK OBSERVERS
         .onChange(of: audioManager.activeTrackTitle) { _, newValue in
             isScrubbing = false
             localScrubValue = 0.0
@@ -278,6 +276,19 @@ struct FlowView: View {
             isScrubbing = false
             localScrubValue = 0.0
             scrubTrackID = audioManager.activeTrackTitle
+        }
+    }
+    
+    private func togglePlaybackAction() {
+        let isCurrentlyPlaying = audioManager.isPlaying
+        let activeTrack = settings.selectedTrack
+        
+        if isCurrentlyPlaying {
+            audioManager.pause()
+        } else if isCurrentTrackLocallyReady {
+            audioManager.play(trackName: activeTrack, using: settings)
+        } else {
+            settings.downloadCloudTrackOnDemand(activeTrack)
         }
     }
     
@@ -293,6 +304,11 @@ struct FlowView: View {
     }
     
     private func navigateTrack(forward: Bool) {
+        if !forward && audioManager.queryCalculatedTimelineProgressPosition() > 3.0 {
+            audioManager.seekToProgressPercentage(0.0)
+            return
+        }
+        
         let totalTracks = settings.instrumentalBackingTracks.count
         guard totalTracks > 0 else { return }
         

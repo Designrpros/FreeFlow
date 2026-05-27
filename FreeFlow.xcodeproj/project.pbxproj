@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AD023BA82FBF50970096AF08 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = AD023BA72FBF50970096AF08 /* README.md */; };
+		AD4E06C32FC6D5D8009D8E6D /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = AD4E06C22FC6D5D8009D8E6D /* AudioKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AD4E06C32FC6D5D8009D8E6D /* AudioKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +135,7 @@
 			);
 			name = FreeFlow;
 			packageProductDependencies = (
+				AD4E06C22FC6D5D8009D8E6D /* AudioKit */,
 			);
 			productName = FreeFlow;
 			productReference = AD014A592FBDA3C50031DD16 /* FreeFlow.app */;
@@ -189,6 +192,9 @@
 			);
 			mainGroup = AD014A502FBDA3C50031DD16;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AD4E06C12FC6D5D8009D8E6D /* XCRemoteSwiftPackageReference "AudioKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AD014A5A2FBDA3C50031DD16 /* Products */;
 			projectDirPath = "";
@@ -563,6 +569,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AD4E06C12FC6D5D8009D8E6D /* XCRemoteSwiftPackageReference "AudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/AudioKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AD4E06C22FC6D5D8009D8E6D /* AudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD4E06C12FC6D5D8009D8E6D /* XCRemoteSwiftPackageReference "AudioKit" */;
+			productName = AudioKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = AD014A512FBDA3C50031DD16 /* Project object */;
 }

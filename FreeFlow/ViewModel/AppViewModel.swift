@@ -12,19 +12,19 @@ final class AppViewModel: ObservableObject {
     @Published var hasFinishedSplash: Bool = false
     
     // --- LOCAL STORAGE KEYS ---
-    private let kFreestyleMode = "ff_freestyle_mode"
-    private let kRefreshStyle = "ff_refresh_style"
-    private let kWordSource = "ff_word_source"
-    private let kNumberOfWords = "ff_number_of_words"
-    private let kRefreshInterval = "ff_refresh_interval"
-    private let kSelectedTrack = "ff_selected_track"
-    private let kPreventScreenLock = "ff_prevent_screen_lock"
-    private let kLoopWithCrossfade = "ff_loop_with_crossfade"
-    private let kEndBehavior = "ff_end_behavior"
-    private let kAppTheme = "ff_app_theme"
-    private let kUseManualAnchor = "ff_use_manual_anchor"
-    private let kCanvasColor = "ff_canvas_color"
-    private let kAppAccent = "ff_app_accent"
+    private static let kFreestyleMode = "ff_freestyle_mode"
+    private static let kRefreshStyle = "ff_refresh_style"
+    private static let kWordSource = "ff_word_source"
+    private static let kNumberOfWords = "ff_number_of_words"
+    private static let kRefreshInterval = "ff_refresh_interval"
+    private static let kSelectedTrack = "ff_selected_track"
+    private static let kPreventScreenLock = "ff_prevent_screen_lock"
+    private static let kLoopWithCrossfade = "ff_loop_with_crossfade"
+    private static let kEndBehavior = "ff_end_behavior"
+    private static let kAppTheme = "ff_app_theme"
+    private static let kUseManualAnchor = "ff_use_manual_anchor"
+    private static let kCanvasColor = "ff_canvas_color"
+    private static let kAppAccent = "ff_app_accent"
 
     init() {}
     
@@ -47,7 +47,8 @@ final class AppViewModel: ObservableObject {
         self.hasFinishedSplash = true
     }
     
-    func loadSavedSettings(into settings: FlowSettings) {
+    // ✅ FIX: Converted to static function to completely eliminate instance creation overhead leaks
+    static func loadSavedSettings(into settings: FlowSettings) {
         let defaults = UserDefaults.standard
         
         if let rawMode = defaults.string(forKey: kFreestyleMode), let mode = FreestyleMode(rawValue: rawMode) {
@@ -100,7 +101,8 @@ final class AppViewModel: ObservableObject {
         }
     }
     
-    func saveSettings(from settings: FlowSettings) {
+    // ✅ FIX: Converted to static function to optimize file writing pass operations
+    static func saveSettings(from settings: FlowSettings) {
         let defaults = UserDefaults.standard
         
         defaults.set(settings.freestyleMode.rawValue, forKey: kFreestyleMode)
