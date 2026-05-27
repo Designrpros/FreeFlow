@@ -90,9 +90,7 @@ extension AudioManager {
         if activeTrackTitle == formattedTrackName {
             if !isPlaying {
                 print("Playback 🔊 [Telemetry-Playback] Target stream path matches loaded asset. Forwarding resume sequence to player.play()...")
-                // ✅ FIX: Force audio engine startup on resume before running player activation registers
                 _ = ensureEngineRunning()
-                
                 player.play()
                 isPlaying = true
                 self.updateNowPlayingPlaybackState(isPlaying: true)
@@ -161,13 +159,8 @@ extension AudioManager {
         
         let pauseWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
             guard let self = self else { return }
+            // ✅ FIX: Pause the player node, but leave the global engine running to safeguard active recordings
             self.player.pause()
-            
-            // ✅ FIX FOR IOS LOCKSCREEN BUTTON SYNC: Stop the core engine hardware pipeline loop
-            // to notify the OS that active audio streaming has completely halted. This forces the system
-            // toggle icons to switch to Play mode immediately.
-            self.engine.stop()
-            print("Playback ⏸️ [Telemetry-Playback] [Background Queue] Finished halting engine output line context.")
         }
         
         DispatchQueue.global(qos: .utility).async(execute: pauseWorkItem)
@@ -183,10 +176,8 @@ extension AudioManager {
         
         let stopWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
             guard let self = self else { return }
+            // ✅ FIX: Stop the player node, but preserve engine operational registers
             self.player.stop()
-            
-            // Stop engine loop on complete stop too
-            self.engine.stop()
             print("Playback 🛑 [Telemetry-Playback] [Background Queue] Finished flushing player nodes.")
         }
         

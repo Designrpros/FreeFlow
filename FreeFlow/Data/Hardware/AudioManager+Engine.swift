@@ -16,14 +16,13 @@ extension AudioManager {
         print("🏗️ [Telemetry-Engine] Pre-warming core framework initialization registers...")
         
         #if os(iOS)
-        // ✅ FIX: Removed .mixWithOthers to declare primary exclusive media focus over the OS transport layer
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             try session.setActive(true)
-            print("📱 [Telemetry-Engine] Application AVAudioSession launched under global EXCLUSIVE high-fidelity PlayAndRecord tracking context profiles.")
+            print("📱 [Telemetry-Engine] Application AVAudioSession launched under global high-fidelity Playback tracking profile.")
         } catch {
-            print("⚠️ [Telemetry-Engine] Failed pre-warming iOS global session handles matching application launch: \(error.localizedDescription)")
+            print("⚠️ [Telemetry-Engine] Failed pre-warming iOS global session handles: \(error.localizedDescription)")
         }
         #endif
         
@@ -67,16 +66,20 @@ extension AudioManager {
         }
     }
     
+    @MainActor
     internal func toggleHardwareMicMonitor(enabled: Bool) {
         print("🎙️ [Telemetry-Engine] Request to alter local microphone hardware live monitoring track lane: \(enabled)")
+        
+        // Securely forward context changes onto the isolated main-actor recorder singleton instance
+        AudioRecorderManager.shared.updateMonitoringVolume(enabled: enabled)
+        
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         do {
-            // ✅ FIX: Maintained absolute exclusive media focus here when monitoring shifts to lock out background music apps
             if enabled {
                 try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP])
             } else {
-                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+                try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             }
             try session.setActive(true)
             print("📱 [Telemetry-Engine] Live monitoring session adjustment applied successfully.")
