@@ -2,7 +2,7 @@
 //  AudioManager+Playback.swift
 //  FreeFlow
 //
-//  Created by Vegar Berentsen on 26/05/2026.
+//  Created by Vegar Berentsen on 27/05/2026.
 //
 
 import Foundation
@@ -32,6 +32,13 @@ extension AudioManager {
                 guard let self = self else { return }
                 let rateValue = Float(targetSpeed)
                 print("Playback 🔊 [Telemetry-Playback] Combine Observation: Backing speed multiplier altered context down to \(rateValue)x")
+                
+                if let lastTimestamp = self.lastPlayAbsoluteTimestamp {
+                    let elapsed = Date().timeIntervalSince(lastTimestamp) * Double(self.cachedPlaybackRate)
+                    self.baseSeekTime += elapsed
+                    self.lastPlayAbsoluteTimestamp = Date()
+                }
+                
                 self.cachedPlaybackRate = rateValue
                 if self.timePitch.rate != rateValue {
                     self.timePitch.rate = rateValue
@@ -61,17 +68,95 @@ extension AudioManager {
                 self.toggleHardwareMicMonitor(enabled: enabled)
             }
             .store(in: &settingsCancellables)
+            
+        settings.$endBehavior
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] behavior in
+                guard let self = self else { return }
+                print("Playback 🔊 [Telemetry-Playback] Combine Observation: End behavior adjusted to \(behavior.rawValue)")
+                self.configurePlaybackEndBehavior(using: settings)
+            }
+            .store(in: &settingsCancellables)
+            
+        Timer.publish(every: 0.15, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.monitorTrackCompletionState()
+            }
+            .store(in: &settingsCancellables)
+    }
+    
+    internal func configurePlaybackEndBehavior(using settings: FlowSettings) {
+        player.isLooping = false
+        player.completionHandler = nil
+        print("Playback 🔊 [Telemetry-Playback] Baseline hardware loop attributes registered safely.")
+    }
+    
+    private func monitorTrackCompletionState() {
+        guard isPlaying && !isSeekingTimeline else { return }
+        guard let _ = settingsReference else { return }
+        guard activeTrackDuration > 0 else { return }
+        
+        let currentTime = queryCalculatedTimelineProgressPosition()
+        guard currentTime > 0.5 else { return }
+        
+        let isNearEnd = currentTime >= (activeTrackDuration - 0.35)
+        if isNearEnd {
+            executeAutoAdvanceOrLoop()
+        }
+    }
+    
+    internal func executeAutoAdvanceOrLoop() {
+        guard let settings = settingsReference else { return }
+        
+        self.isSeekingTimeline = true
+        seekSessionID += 1
+        let currentID = seekSessionID
+        
+        if settings.endBehavior == .loopTrack {
+            print("Playback 🔁 [Telemetry-Playback] Software loop boundary hit. Rewinding player timeline register...")
+            player.pause()
+            player.seek(time: 0.0)
+            
+            self.baseSeekTime = 0.0
+            self.lastPlayAbsoluteTimestamp = Date()
+            
+            _ = ensureEngineRunning()
+            player.play()
+            self.trackLoopCounter += 1
+            
+            DispatchQueue.main.async {
+                self.updateNowPlayingPlaybackState(isPlaying: true)
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                if self.seekSessionID == currentID {
+                    self.isSeekingTimeline = false
+                }
+            }
+        } else {
+            print("Playback ⏭️ [Telemetry-Playback] Software completion boundary hit. Advancing sequence vector...")
+            self.isPlaying = false
+            self.player.stop()
+            self.advanceToNextTrack()
+        }
     }
     
     func play(trackName: String, using settings: FlowSettings) {
         let now = Date()
         print("Playback 🔊 [Telemetry-Playback] Central Transport play() request initiated for tracking asset title description: '\(trackName)'")
+        
+        // ✅ TYPO FIX: Removed the incorrect underscore to match AudioManager.swift scope anchors
         if now.timeIntervalSince(lastSchedulingPassTimestamp) < 0.35 {
             print("Playback 📝 [Telemetry-Playback] Transport duplicate filtering pass active. Shielding framework from frame bounce jitter loops.")
             return
         }
         lastSchedulingPassTimestamp = now
         
+        self.isSeekingTimeline = true
         self.settingsReference = settings
         
         var formattedTrackName = trackName
@@ -91,8 +176,12 @@ extension AudioManager {
             if !isPlaying {
                 print("Playback 🔊 [Telemetry-Playback] Target stream path matches loaded asset. Forwarding resume sequence to player.play()...")
                 _ = ensureEngineRunning()
+                
+                self.lastPlayAbsoluteTimestamp = Date()
+                
                 player.play()
                 isPlaying = true
+                self.isSeekingTimeline = false
                 self.updateNowPlayingPlaybackState(isPlaying: true)
             }
             return
@@ -110,6 +199,7 @@ extension AudioManager {
         
         guard let url = targetURL else {
             print("Playback ⚠️ [Telemetry-Playback] Terminal Resolve Failure: Local storage URL mapping missing.")
+            self.isSeekingTimeline = false
             return
         }
         
@@ -133,6 +223,11 @@ extension AudioManager {
                     self.timePitch.rate = Float(settings.playbackSpeed)
                     self.timePitch.pitch = Float(settings.pitchShiftSemitones * 100)
                     
+                    self.configurePlaybackEndBehavior(using: settings)
+                    
+                    self.baseSeekTime = 0.0
+                    self.lastPlayAbsoluteTimestamp = Date()
+                    
                     self.player.play()
                     
                     self.activeTrackTitle = formattedTrackName
@@ -140,12 +235,17 @@ extension AudioManager {
                     self.isPlaying = true
                     self.trackLoopCounter += 1
                     
+                    self.isSeekingTimeline = false
+                    
                     print("Playback 🔊 [Telemetry-Playback] Advanced AudioKit stream loop wrapper running actively. Title='\(formattedTrackName)', Duration=\(self.player.duration)s")
                     
                     self.synchronizeNowPlayingMetadata(title: formattedTrackName, duration: self.player.duration, isPlaying: true)
                 }
             } catch {
                 print("Playback ⚠️ [Telemetry-Playback] [Background Queue] Core audio file tracking parse caught an allocation loading exception: \(error)")
+                DispatchQueue.main.async {
+                    self.isSeekingTimeline = false
+                }
             }
         }
         
@@ -154,12 +254,18 @@ extension AudioManager {
     
     func pause() {
         print("Playback ⏸️ [Telemetry-Playback] Central Transport instruction pause() executed. Deflecting blocking loops off Main Thread context...")
+        
+        if let lastTimestamp = lastPlayAbsoluteTimestamp {
+            let elapsed = Date().timeIntervalSince(lastTimestamp) * Double(cachedPlaybackRate)
+            baseSeekTime += elapsed
+        }
+        lastPlayAbsoluteTimestamp = nil
+        
         self.isPlaying = false
         self.updateNowPlayingPlaybackState(isPlaying: false)
         
         let pauseWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
             guard let self = self else { return }
-            // ✅ FIX: Pause the player node, but leave the global engine running to safeguard active recordings
             self.player.pause()
         }
         
@@ -172,11 +278,14 @@ extension AudioManager {
         self.activeTrackTitle = ""
         self.currentProgressPosition = 0.0
         self.activeTrackDuration = 0.0
+        
+        self.baseSeekTime = 0.0
+        self.lastPlayAbsoluteTimestamp = nil
+        
         self.updateNowPlayingPlaybackState(isPlaying: false)
         
         let stopWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
             guard let self = self else { return }
-            // ✅ FIX: Stop the player node, but preserve engine operational registers
             self.player.stop()
             print("Playback 🛑 [Telemetry-Playback] [Background Queue] Finished flushing player nodes.")
         }
@@ -188,13 +297,52 @@ extension AudioManager {
         guard activeTrackDuration > 0 else { return }
         let targetTime = percentage * activeTrackDuration
         print("Playback 🔍 [Telemetry-Playback] Timeline index coordinate track request received. Jumping pointer offset directly to: \(targetTime)s (\(percentage * 100)%)")
+        
+        seekSessionID += 1
+        let currentID = seekSessionID
+        
+        self.isSeekingTimeline = true
+        self.currentProgressPosition = targetTime
+        
+        // Unconditionally anchor the absolute reference clock immediately regardless of play state
+        self.baseSeekTime = targetTime
+        
+        let wasPlayingBeforeSeek = isPlaying
+        if wasPlayingBeforeSeek {
+            player.pause()
+        }
+        
         player.seek(time: targetTime)
-        currentProgressPosition = targetTime
-        self.updateNowPlayingPlaybackState(isPlaying: self.isPlaying)
+        
+        if wasPlayingBeforeSeek {
+            _ = ensureEngineRunning()
+            player.play()
+            self.lastPlayAbsoluteTimestamp = Date()
+        } else {
+            self.lastPlayAbsoluteTimestamp = nil
+        }
+        
+        self.updateNowPlayingPlaybackState(isPlaying: wasPlayingBeforeSeek)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self = self else { return }
+            if self.seekSessionID == currentID {
+                self.isSeekingTimeline = false
+                print("Playback 🔍 [Telemetry-Playback] Seek timeline lock released securely.")
+            }
+        }
     }
     
     func queryCalculatedTimelineProgressPosition() -> TimeInterval {
-        return player.currentTime
+        if isSeekingTimeline {
+            return currentProgressPosition
+        }
+        if let lastTimestamp = lastPlayAbsoluteTimestamp {
+            let elapsed = Date().timeIntervalSince(lastTimestamp) * Double(cachedPlaybackRate)
+            let calculatedTime = baseSeekTime + elapsed
+            return max(0.0, min(activeTrackDuration, calculatedTime))
+        }
+        return max(0.0, min(activeTrackDuration, baseSeekTime))
     }
     
     internal func advanceToPreviousTrack() {

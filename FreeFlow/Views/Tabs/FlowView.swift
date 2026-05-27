@@ -14,10 +14,6 @@ struct FlowView: View {
     @StateObject private var audioManager = AudioManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var isScrubbing: Bool = false
-    @State private var localScrubValue: Double = 0.0
-    @State private var scrubTrackID: String = ""
-
     init() {
         _vm = StateObject(wrappedValue: FlowViewModel())
     }
@@ -118,62 +114,16 @@ struct FlowView: View {
             
             Spacer()
             
-            // TIMELINE TIMESTAMP PROGRESS CONTROL MODULE CARD
-            if audioManager.activeTrackDuration > 0 {
-                VStack(spacing: 4) {
-                    TimelineView(.animation(minimumInterval: 0.05, paused: !audioManager.isPlaying)) { context in
-                        let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
-                        
-                        VStack(spacing: 4) {
-                            Slider(
-                                value: Binding(
-                                    get: {
-                                        if isScrubbing { return localScrubValue }
-                                        guard audioManager.activeTrackDuration > 0 else { return 0.0 }
-                                        return activePosition / audioManager.activeTrackDuration
-                                    },
-                                    set: { newValue in
-                                        if !isScrubbing {
-                                            isScrubbing = true
-                                            scrubTrackID = audioManager.activeTrackTitle
-                                        }
-                                        localScrubValue = newValue
-                                    }
-                                ),
-                                in: 0.0...1.0,
-                                onEditingChanged: { editing in
-                                    if !editing {
-                                        if scrubTrackID == audioManager.activeTrackTitle {
-                                            audioManager.seekToProgressPercentage(localScrubValue)
-                                        } else {
-                                            localScrubValue = 0.0
-                                        }
-                                        
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                            self.isScrubbing = false
-                                        }
-                                    }
-                                }
-                            )
-                            .tint(settings.appAccent.color)
-                            .controlSize(.small)
-                            .padding(.horizontal, 32)
-                            
-                            HStack {
-                                Text(formatTimeLabel(isScrubbing ? (localScrubValue * audioManager.activeTrackDuration) : activePosition))
-                                Spacer()
-                                Text(formatTimeLabel(audioManager.activeTrackDuration))
-                            }
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(contentColor.opacity(0.4))
-                            .padding(.horizontal, 36)
-                        }
-                    }
-                }
-                .padding(.bottom, 12)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: audioManager.activeTrackDuration)
+            // ✅ RIGID FOOTPRINT LAYOUT: Keeps the audio control workspace layout locked
+            // to stop the text nodes above from bouncing when tracks shift
+            VStack(spacing: 0) {
+                let isTrackLoaded = !audioManager.activeTrackTitle.isEmpty && audioManager.activeTrackDuration > 0
+                PlaybackSliderView(contentColor: contentColor)
+                    .opacity(isTrackLoaded ? 1.0 : 0.0)
+                    .animation(.smooth(duration: 0.35), value: isTrackLoaded)
             }
+            .frame(height: 52)
+            .padding(.bottom, 12)
             
             VStack(spacing: 24) {
                 HStack(spacing: 40) {
@@ -247,9 +197,6 @@ struct FlowView: View {
         .onAppear { vm.ensureInitialized(using: settings) }
         .onDisappear { vm.terminateEcosystemEngine() }
         .background(settings.canvasColor.backgroundColor(isDark: isDarkMode).ignoresSafeArea())
-        
-        // 🚀 FIX: Spacebar mapping is attached here to the background frame hierarchy instead of nested on the Button control itself.
-        // This decouples standard focus highlight parameters, preventing double actions.
         .onReceive(Just(audioManager.isPlaying)) { _ in }
         .background(
             Button(action: {
@@ -260,22 +207,11 @@ struct FlowView: View {
             .keyboardShortcut(.space, modifiers: [])
             .disabled(false)
         )
-        
         .onChange(of: settings.numberOfWords) { _, _ in
             vm.refresh(using: settings)
         }
         .onChange(of: settings.freestyleMode) { _, _ in
             vm.refresh(using: settings)
-        }
-        .onChange(of: audioManager.activeTrackTitle) { _, newValue in
-            isScrubbing = false
-            localScrubValue = 0.0
-            scrubTrackID = newValue
-        }
-        .onChange(of: audioManager.trackLoopCounter) { _, _ in
-            isScrubbing = false
-            localScrubValue = 0.0
-            scrubTrackID = audioManager.activeTrackTitle
         }
     }
     
@@ -316,10 +252,6 @@ struct FlowView: View {
         if settings.instrumentalBackingTracks.indices.contains(newIndex) {
             let nextTrackName = settings.instrumentalBackingTracks[newIndex]
             
-            isScrubbing = false
-            localScrubValue = 0.0
-            scrubTrackID = nextTrackName
-            
             settings.selectedTrack = nextTrackName
             audioManager.currentProgressPosition = 0.0
             
@@ -331,7 +263,78 @@ struct FlowView: View {
             }
         }
     }
-    
+}
+
+// MARK: - FIXED DECOUPLED TIMELINE SLIDER
+struct PlaybackSliderView: View {
+    @ObservedObject var audioManager = AudioManager.shared
+    @EnvironmentObject private var settings: FlowSettings
+    let contentColor: Color
+
+    @State private var localProgress: Double = 0.0
+    @State private var isUserDragging: Bool = false
+    @State private var runningTimeLabel: String = "0:00"
+
+    var body: some View {
+        VStack(spacing: 4) {
+            // ✅ ISOLATED SLIDER ENGINE: Local tracking completely avoids overwrites
+            // by external background audio telemetry registers during touch movements
+            Slider(
+                value: $localProgress,
+                in: 0.0...1.0,
+                onEditingChanged: { dragging in
+                    isUserDragging = dragging
+                    if dragging {
+                        audioManager.isSeekingTimeline = true
+                    } else {
+                        audioManager.seekToProgressPercentage(localProgress)
+                    }
+                }
+            )
+            .tint(settings.appAccent.color)
+            .controlSize(.small)
+            .padding(.horizontal, 32)
+            
+            HStack {
+                Text(runningTimeLabel)
+                Spacer()
+                Text(formatTimeLabel(audioManager.activeTrackDuration))
+            }
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(contentColor.opacity(0.4))
+            .padding(.horizontal, 36)
+        }
+        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+            // Guard against rewriting parameters while user fingers are modifying positions
+            guard !isUserDragging && !audioManager.isSeekingTimeline else { return }
+            
+            let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
+            let duration = audioManager.activeTrackDuration
+            
+            if duration > 0 {
+                let calculated = activePosition / duration
+                localProgress = max(0.0, min(1.0, calculated))
+            } else {
+                localProgress = 0.0
+            }
+            runningTimeLabel = formatTimeLabel(activePosition)
+        }
+        .onChange(of: localProgress) { _, newValue in
+            // Keep numerical labels fluid without dropping system frames
+            if isUserDragging || audioManager.isSeekingTimeline {
+                runningTimeLabel = formatTimeLabel(newValue * audioManager.activeTrackDuration)
+            }
+        }
+        .onChange(of: audioManager.activeTrackTitle) { _, _ in
+            localProgress = 0.0
+            runningTimeLabel = "0:00"
+        }
+        .onChange(of: audioManager.trackLoopCounter) { _, _ in
+            localProgress = 0.0
+            runningTimeLabel = "0:00"
+        }
+    }
+
     private func formatTimeLabel(_ time: TimeInterval) -> String {
         guard !time.isNaN && !time.isInfinite && time > 0 else { return "0:00" }
         let minutes = Int(time) / 60

@@ -19,7 +19,7 @@ extension AudioManager {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-            try session.setPreferredIOBufferDuration(0.005) // Low latency buffer threshold (~5ms execution cycles)
+            try session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
             print("📱 [Telemetry-Engine] Application AVAudioSession launched under low-latency baseline parameters.")
         } catch {
@@ -27,11 +27,9 @@ extension AudioManager {
         }
         #endif
         
-        // Compile initial structural layout under input-free parameters to avoid tripping menu bar indicators
         rebuildEngineGraph(includeInput: false)
     }
     
-    /// Dynamically alters the active processing matrix to drop or map microphone device access channels cleanly on demand
     @MainActor
     internal func rebuildEngineGraph(includeInput: Bool) {
         print("🏗️ [Telemetry-Engine] Regenerating processing matrix topology. Hardware Input Included: \(includeInput)")
@@ -40,11 +38,9 @@ extension AudioManager {
         let currentTrackName = activeTrackTitle
         let currentPlaybackPosition = player.currentTime
         
-        // Flush and halt operational frames on the old graph layout
         player.stop()
         engine.stop()
         
-        // Re-instantiate pristine audio node primitives to completely shed old hardware locks
         let newEngine = AudioEngine()
         let newPlayer = AudioPlayer()
         let newTimePitch = TimePitch(newPlayer)
@@ -87,7 +83,6 @@ extension AudioManager {
         
         try? newEngine.start()
         
-        // Restore running transport streams gaplessly if a performance backing track was disrupted mid-session
         if !currentTrackName.isEmpty {
             let cleanInputName = currentTrackName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
             var targetURL: URL? = nil
@@ -102,9 +97,21 @@ extension AudioManager {
             if let url = targetURL {
                 do {
                     try newPlayer.load(url: url)
+                    newPlayer.isLooping = false // Shift entirely to manual loop strategies
+                    
                     if let settings = settingsReference {
                         newTimePitch.rate = Float(settings.playbackSpeed)
                         newTimePitch.pitch = Float(settings.pitchShiftSemitones * 100)
+                        
+                        newPlayer.completionHandler = { [weak self] in
+                            guard let self = self else { return }
+                            if self.isSeekingTimeline { return }
+                            DispatchQueue.main.async {
+                                if self.isPlaying {
+                                    self.executeAutoAdvanceOrLoop()
+                                }
+                            }
+                        }
                     }
                     if wasPlaying {
                         newPlayer.seek(time: currentPlaybackPosition)

@@ -33,6 +33,11 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var trackLoopCounter: Int = 0
     @Published var isSeekingTimeline = false
     
+    // --- HIGH PRECISION MAIN-THREAD TIMELINE TRACKING (BYPASSES AUDIOKIT BUG) ---
+    internal var baseSeekTime: TimeInterval = 0.0
+    internal var lastPlayAbsoluteTimestamp: Date? = nil
+    internal var seekSessionID: Int = 0
+    
     // Lockscreen metadata helper registers
     internal var cachedPlaybackRate: Float = 1.0
     
