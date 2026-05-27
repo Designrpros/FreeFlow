@@ -114,15 +114,13 @@ struct FlowView: View {
             
             Spacer()
             
-            // ✅ RIGID FOOTPRINT LAYOUT: Keeps the audio control workspace layout locked
-            // to stop the text nodes above from bouncing when tracks shift
             VStack(spacing: 0) {
                 let isTrackLoaded = !audioManager.activeTrackTitle.isEmpty && audioManager.activeTrackDuration > 0
                 PlaybackSliderView(contentColor: contentColor)
                     .opacity(isTrackLoaded ? 1.0 : 0.0)
                     .animation(.smooth(duration: 0.35), value: isTrackLoaded)
             }
-            .frame(height: 52)
+            .frame(height: 48)
             .padding(.bottom, 12)
             
             VStack(spacing: 24) {
@@ -265,7 +263,7 @@ struct FlowView: View {
     }
 }
 
-// MARK: - FIXED DECOUPLED TIMELINE SLIDER
+// MARK: - FIXED DECOUPLED TIMELINE SLIDER COMPONENT
 struct PlaybackSliderView: View {
     @ObservedObject var audioManager = AudioManager.shared
     @EnvironmentObject private var settings: FlowSettings
@@ -273,21 +271,29 @@ struct PlaybackSliderView: View {
 
     @State private var localProgress: Double = 0.0
     @State private var isUserDragging: Bool = false
+    @State private var isUiSettling: Bool = false
     @State private var runningTimeLabel: String = "0:00"
 
     var body: some View {
         VStack(spacing: 4) {
-            // ✅ ISOLATED SLIDER ENGINE: Local tracking completely avoids overwrites
-            // by external background audio telemetry registers during touch movements
             Slider(
                 value: $localProgress,
                 in: 0.0...1.0,
                 onEditingChanged: { dragging in
-                    isUserDragging = dragging
                     if dragging {
-                        audioManager.isSeekingTimeline = true
+                        isUserDragging = true
+                        isUiSettling = true
+                        
+                        // ✅ ATOMIC INVALIDATION OVERRIDE: Tells the playback file to immediately
+                        // increment its lock token, completely disarming old asynchronous timers.
+                        audioManager.startSeekTransaction()
                     } else {
+                        isUserDragging = false
                         audioManager.seekToProgressPercentage(localProgress)
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self.isUiSettling = false
+                        }
                     }
                 }
             )
@@ -305,8 +311,7 @@ struct PlaybackSliderView: View {
             .padding(.horizontal, 36)
         }
         .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
-            // Guard against rewriting parameters while user fingers are modifying positions
-            guard !isUserDragging && !audioManager.isSeekingTimeline else { return }
+            guard !isUserDragging && !isUiSettling && !audioManager.isSeekingTimeline else { return }
             
             let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
             let duration = audioManager.activeTrackDuration
@@ -320,8 +325,7 @@ struct PlaybackSliderView: View {
             runningTimeLabel = formatTimeLabel(activePosition)
         }
         .onChange(of: localProgress) { _, newValue in
-            // Keep numerical labels fluid without dropping system frames
-            if isUserDragging || audioManager.isSeekingTimeline {
+            if isUserDragging || isUiSettling || audioManager.isSeekingTimeline {
                 runningTimeLabel = formatTimeLabel(newValue * audioManager.activeTrackDuration)
             }
         }
@@ -336,7 +340,8 @@ struct PlaybackSliderView: View {
     }
 
     private func formatTimeLabel(_ time: TimeInterval) -> String {
-        guard !time.isNaN && !time.isInfinite && time > 0 else { return "0:00" }
+        let maxDurationLimit: TimeInterval = 3600.0
+        guard !time.isNaN && !time.isInfinite && time > 0 && time < maxDurationLimit else { return "0:00" }
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)

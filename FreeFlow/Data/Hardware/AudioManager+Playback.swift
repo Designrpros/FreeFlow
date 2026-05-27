@@ -115,7 +115,9 @@ extension AudioManager {
         seekSessionID += 1
         let currentID = seekSessionID
         
-        if settings.endBehavior == .loopTrack {
+        let isUserRecordingFile = activeTrackTitle.lowercased().hasSuffix(".m4a")
+        
+        if settings.endBehavior == .loopTrack && !isUserRecordingFile {
             print("Playback 🔁 [Telemetry-Playback] Software loop boundary hit. Rewinding player timeline register...")
             player.pause()
             player.seek(time: 0.0)
@@ -138,18 +140,27 @@ extension AudioManager {
                 }
             }
         } else {
-            print("Playback ⏭️ [Telemetry-Playback] Software completion boundary hit. Advancing sequence vector...")
+            print("Playback ⏭️ [Telemetry-Playback] Software completion boundary hit. Terminating or advancing sequence context...")
             self.isPlaying = false
             self.player.stop()
-            self.advanceToNextTrack()
+            
+            if isUserRecordingFile {
+                self.activeTrackTitle = ""
+                self.baseSeekTime = 0.0
+                self.lastPlayAbsoluteTimestamp = nil
+                self.isSeekingTimeline = false
+                DispatchQueue.main.async {
+                    self.updateNowPlayingPlaybackState(isPlaying: false)
+                }
+            } else {
+                self.advanceToNextTrack()
+            }
         }
     }
     
     func play(trackName: String, using settings: FlowSettings) {
         let now = Date()
         print("Playback 🔊 [Telemetry-Playback] Central Transport play() request initiated for tracking asset title description: '\(trackName)'")
-        
-        // ✅ TYPO FIX: Removed the incorrect underscore to match AudioManager.swift scope anchors
         if now.timeIntervalSince(lastSchedulingPassTimestamp) < 0.35 {
             print("Playback 📝 [Telemetry-Playback] Transport duplicate filtering pass active. Shielding framework from frame bounce jitter loops.")
             return
@@ -198,7 +209,7 @@ extension AudioManager {
         }
         
         guard let url = targetURL else {
-            print("Playback ⚠️ [Telemetry-Playback] Terminal Resolve Failure: Local storage URL mapping missing.")
+            print("Playback ⚠️ [Telemetry-Playback] Terminal Box Failure: Local storage URL mapping missing.")
             self.isSeekingTimeline = false
             return
         }
@@ -293,6 +304,13 @@ extension AudioManager {
         DispatchQueue.global(qos: .utility).async(execute: stopWorkItem)
     }
     
+    // ✅ NEW INTERACTION TRANSACT HOOK: Instantly voids trailing async timers
+    // from older touch gestures when a new drag segment begins
+    func startSeekTransaction() {
+        self.isSeekingTimeline = true
+        self.seekSessionID += 1
+    }
+    
     func seekToProgressPercentage(_ percentage: Double) {
         guard activeTrackDuration > 0 else { return }
         let targetTime = percentage * activeTrackDuration
@@ -303,8 +321,6 @@ extension AudioManager {
         
         self.isSeekingTimeline = true
         self.currentProgressPosition = targetTime
-        
-        // Unconditionally anchor the absolute reference clock immediately regardless of play state
         self.baseSeekTime = targetTime
         
         let wasPlayingBeforeSeek = isPlaying
