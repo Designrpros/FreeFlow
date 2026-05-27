@@ -97,20 +97,17 @@ extension AudioManager {
             if let url = targetURL {
                 do {
                     try newPlayer.load(url: url)
-                    newPlayer.isLooping = false // Shift entirely to manual loop strategies
-                    
                     if let settings = settingsReference {
                         newTimePitch.rate = Float(settings.playbackSpeed)
                         newTimePitch.pitch = Float(settings.pitchShiftSemitones * 100)
                         
-                        newPlayer.completionHandler = { [weak self] in
-                            guard let self = self else { return }
-                            if self.isSeekingTimeline { return }
-                            DispatchQueue.main.async {
-                                if self.isPlaying {
-                                    self.executeAutoAdvanceOrLoop()
-                                }
-                            }
+                        // ✅ FIX: Reapply behavior logic constraints inside hotswap operations
+                        if settings.endBehavior == .loopTrack {
+                            newPlayer.isLooping = true
+                        } else {
+                            newPlayer.isLooping = false
+                            // Completion handler disabled – relying on timer-based monitor only
+                            newPlayer.completionHandler = nil
                         }
                     }
                     if wasPlaying {

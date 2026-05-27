@@ -45,6 +45,8 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     internal var settingsReference: FlowSettings?
     internal var settingsCancellables = Set<AnyCancellable>()
     internal var lastSchedulingPassTimestamp: Date = Date.distantPast
+    internal var pendingSeekWorkItem: DispatchWorkItem?
+    internal var lastSeekTime: Date = Date.distantPast
     
     @Published var masterVolume: Float = 1.0 {
         didSet {

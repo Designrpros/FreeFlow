@@ -79,7 +79,8 @@ extension AudioManager {
             }
             .store(in: &settingsCancellables)
             
-        Timer.publish(every: 0.15, on: .main, in: .common)
+        // Reduced frequency to 0.3 seconds
+        Timer.publish(every: 0.3, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self else { return }
@@ -95,6 +96,8 @@ extension AudioManager {
     }
     
     private func monitorTrackCompletionState() {
+        // Ignore completion for 2 seconds after a seek
+        guard Date().timeIntervalSince(lastSeekTime) > 3.0 else { return }
         guard isPlaying && !isSeekingTimeline else { return }
         guard let _ = settingsReference else { return }
         guard activeTrackDuration > 0 else { return }
@@ -102,13 +105,19 @@ extension AudioManager {
         let currentTime = queryCalculatedTimelineProgressPosition()
         guard currentTime > 0.5 else { return }
         
-        let isNearEnd = currentTime >= (activeTrackDuration - 0.35)
+        let isNearEnd = currentTime >= (activeTrackDuration - 0.5) // Increased threshold
         if isNearEnd {
             executeAutoAdvanceOrLoop()
         }
     }
     
     internal func executeAutoAdvanceOrLoop() {
+        // Block auto-advance if a seek happened recently
+        guard Date().timeIntervalSince(lastSeekTime) > 2.0 else {
+            print("Playback ⏭️ [Telemetry-Playback] Auto-advance blocked (recent seek)")
+            return
+        }
+        
         guard let settings = settingsReference else { return }
         
         self.isSeekingTimeline = true
@@ -275,12 +284,7 @@ extension AudioManager {
         self.isPlaying = false
         self.updateNowPlayingPlaybackState(isPlaying: false)
         
-        let pauseWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
-            guard let self = self else { return }
-            self.player.pause()
-        }
-        
-        DispatchQueue.global(qos: .utility).async(execute: pauseWorkItem)
+        self.player.pause()
     }
     
     func stop() {
@@ -295,70 +299,74 @@ extension AudioManager {
         
         self.updateNowPlayingPlaybackState(isPlaying: false)
         
-        let stopWorkItem = DispatchWorkItem(qos: .utility, flags: .enforceQoS) { [weak self] in
-            guard let self = self else { return }
-            self.player.stop()
-            print("Playback 🛑 [Telemetry-Playback] [Background Queue] Finished flushing player nodes.")
-        }
-        
-        DispatchQueue.global(qos: .utility).async(execute: stopWorkItem)
+        self.player.stop()
+        print("Playback 🛑 [Telemetry-Playback] Finished flushing player nodes.")
     }
     
-    // ✅ NEW INTERACTION TRANSACT HOOK: Instantly voids trailing async timers
-    // from older touch gestures when a new drag segment begins
     func startSeekTransaction() {
-        self.isSeekingTimeline = true
-        self.seekSessionID += 1
+        pendingSeekWorkItem?.cancel()
+        pendingSeekWorkItem = nil
+        seekSessionID += 1
     }
     
     func seekToProgressPercentage(_ percentage: Double) {
         guard activeTrackDuration > 0 else { return }
         let targetTime = percentage * activeTrackDuration
-        print("Playback 🔍 [Telemetry-Playback] Timeline index coordinate track request received. Jumping pointer offset directly to: \(targetTime)s (\(percentage * 100)%)")
+        print("🔍 Hard seek to \(targetTime)s (\(percentage * 100)%)")
+        
+        // Cancel any pending seek
+        pendingSeekWorkItem?.cancel()
         
         seekSessionID += 1
         let currentID = seekSessionID
         
-        self.isSeekingTimeline = true
-        self.currentProgressPosition = targetTime
-        self.baseSeekTime = targetTime
-        
-        let wasPlayingBeforeSeek = isPlaying
-        if wasPlayingBeforeSeek {
-            player.pause()
-        }
-        
-        player.seek(time: targetTime)
-        
-        if wasPlayingBeforeSeek {
-            _ = ensureEngineRunning()
-            player.play()
-            self.lastPlayAbsoluteTimestamp = Date()
-        } else {
-            self.lastPlayAbsoluteTimestamp = nil
-        }
-        
-        self.updateNowPlayingPlaybackState(isPlaying: wasPlayingBeforeSeek)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self = self else { return }
-            if self.seekSessionID == currentID {
-                self.isSeekingTimeline = false
-                print("Playback 🔍 [Telemetry-Playback] Seek timeline lock released securely.")
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, self.seekSessionID == currentID else { return }
+            
+            let wasPlaying = self.isPlaying
+            
+            // Full stop – clears all internal state
+            self.player.stop()
+            
+            // Perform seek on a clean player
+            self.player.seek(time: targetTime)
+            
+            // Update tracking
+            self.currentProgressPosition = targetTime
+            self.isSeekingTimeline = true
+            self.lastSeekTime = Date()
+            
+            if wasPlaying {
+                _ = self.ensureEngineRunning()
+                // Restart playback
+                self.player.play()
+                self.lastPlayAbsoluteTimestamp = Date()
+                let actual = self.player.currentTime
+                self.baseSeekTime = actual
+                self.currentProgressPosition = actual
+            } else {
+                self.lastPlayAbsoluteTimestamp = nil
+                self.baseSeekTime = targetTime
+            }
+            
+            self.updateNowPlayingPlaybackState(isPlaying: wasPlaying)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.isSeekingTimeline = false
             }
         }
+        
+        pendingSeekWorkItem = workItem
+        // Longer debounce – 0.4 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
     }
     
     func queryCalculatedTimelineProgressPosition() -> TimeInterval {
         if isSeekingTimeline {
             return currentProgressPosition
         }
-        if let lastTimestamp = lastPlayAbsoluteTimestamp {
-            let elapsed = Date().timeIntervalSince(lastTimestamp) * Double(cachedPlaybackRate)
-            let calculatedTime = baseSeekTime + elapsed
-            return max(0.0, min(activeTrackDuration, calculatedTime))
-        }
-        return max(0.0, min(activeTrackDuration, baseSeekTime))
+        let position = player.currentTime
+        return max(0.0, min(activeTrackDuration, position))
     }
     
     internal func advanceToPreviousTrack() {
@@ -384,6 +392,12 @@ extension AudioManager {
     
     internal func advanceToNextTrack() {
         guard let settings = settingsReference else { return }
+        
+        guard Date().timeIntervalSince(lastSeekTime) > 3.0 else {
+            print("Playback ⏭️ [Telemetry-Playback] Auto-advance blocked (recent seek)")
+            return
+        }
+        
         let currentSearchName = activeTrackTitle.isEmpty ? settings.selectedTrack : activeTrackTitle
         let cleanSearchName = currentSearchName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").lowercased()
         

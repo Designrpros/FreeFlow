@@ -310,7 +310,7 @@ struct PlaybackSliderView: View {
             .foregroundColor(contentColor.opacity(0.4))
             .padding(.horizontal, 36)
         }
-        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+        .onReceive(Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()) { _ in
             guard !isUserDragging && !isUiSettling && !audioManager.isSeekingTimeline else { return }
             
             let activePosition = audioManager.queryCalculatedTimelineProgressPosition()
