@@ -14,11 +14,16 @@ import MediaPlayer
 final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     static let shared = AudioManager()
     
-    // --- AUDIOKIT UNIFIED HARDWARE NODES ---
-    internal let engine = AudioEngine()
-    internal let player = AudioPlayer()
-    internal let timePitch: TimePitch
-    internal let mixer = Mixer()
+    // --- AUDIOKIT UNIFIED HARDWARE NODES (MUTABLE FOR SEAMLESS DYNAMIC GRAPH REBUILDS) ---
+    internal var engine = AudioEngine()
+    internal var player = AudioPlayer()
+    internal var timePitch: TimePitch!
+    internal var mixer = Mixer()
+    
+    // --- DYNAMIC HARDWARE LATCH REGISTERS ---
+    internal var isInputAttached = false
+    internal var micMonitorMixer = Mixer()
+    internal var recorder: NodeRecorder?
     
     // --- ECOSYSTEM CROSS-COMPATIBILITY PUBLISHED TARGETS ---
     @Published var isPlaying: Bool = false
@@ -45,9 +50,10 @@ final class AudioManager: NSObject, ObservableObject, @unchecked Sendable {
     
     private override init() {
         print("🔊 [Telemetry-AudioManager] Initializing Global AudioKit Core Shared Singleton Instance Wrapper.")
-        self.timePitch = TimePitch(player)
         super.init()
         
+        // Establish our base time pitch structural nodes
+        self.timePitch = TimePitch(player)
         mixer.addInput(timePitch)
         engine.output = mixer
         

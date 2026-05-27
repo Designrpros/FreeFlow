@@ -18,25 +18,105 @@ extension AudioManager {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            try session.setPreferredIOBufferDuration(0.005) // Low latency buffer threshold (~5ms execution cycles)
             try session.setActive(true)
-            print("📱 [Telemetry-Engine] Application AVAudioSession launched under global high-fidelity Playback tracking profile.")
+            print("📱 [Telemetry-Engine] Application AVAudioSession launched under low-latency baseline parameters.")
         } catch {
             print("⚠️ [Telemetry-Engine] Failed pre-warming iOS global session handles: \(error.localizedDescription)")
         }
         #endif
         
-        if !engine.avEngine.isRunning {
-            DispatchQueue.global(qos: .default).async { [weak self] in
-                guard let self = self else { return }
+        // Compile initial structural layout under input-free parameters to avoid tripping menu bar indicators
+        rebuildEngineGraph(includeInput: false)
+    }
+    
+    /// Dynamically alters the active processing matrix to drop or map microphone device access channels cleanly on demand
+    @MainActor
+    internal func rebuildEngineGraph(includeInput: Bool) {
+        print("🏗️ [Telemetry-Engine] Regenerating processing matrix topology. Hardware Input Included: \(includeInput)")
+        
+        let wasPlaying = isPlaying
+        let currentTrackName = activeTrackTitle
+        let currentPlaybackPosition = player.currentTime
+        
+        // Flush and halt operational frames on the old graph layout
+        player.stop()
+        engine.stop()
+        
+        // Re-instantiate pristine audio node primitives to completely shed old hardware locks
+        let newEngine = AudioEngine()
+        let newPlayer = AudioPlayer()
+        let newTimePitch = TimePitch(newPlayer)
+        let newMixer = Mixer()
+        
+        self.engine = newEngine
+        self.player = newPlayer
+        self.timePitch = newTimePitch
+        self.mixer = newMixer
+        
+        newMixer.addInput(newTimePitch)
+        
+        if includeInput {
+            let newMicMixer = Mixer()
+            self.micMonitorMixer = newMicMixer
+            
+            if let inputNode = newEngine.input {
+                newMicMixer.addInput(inputNode)
+                newMixer.addInput(newMicMixer)
+                
                 do {
-                    try self.engine.start()
-                    print("🔊 [Telemetry-Engine] AudioKit Framework processing matrix successfully activated.")
+                    self.recorder = try NodeRecorder(node: inputNode)
+                    print("🎙️ [Telemetry-Engine] Low-latency NodeRecorder successfully attached directly into core driver hardware layer.")
                 } catch {
-                    print("⚠️ [Telemetry-Engine] Framework startup pass caught an exception: \(error.localizedDescription)")
+                    print("⚠️ [Telemetry-Engine] Failed to bind recorder instance nodes: \(error.localizedDescription)")
+                }
+            }
+            
+            let monitorEnabled = settingsReference?.enableMicMonitor ?? false
+            newMicMixer.volume = monitorEnabled ? 1.0 : 0.0
+            self.isInputAttached = true
+        } else {
+            self.recorder = nil
+            self.isInputAttached = false
+            print("🔊 [Telemetry-Engine] Graph compiled under isolated playback layout constraints. Microphone fully released.")
+        }
+        
+        newEngine.output = newMixer
+        newMixer.volume = masterVolume
+        
+        try? newEngine.start()
+        
+        // Restore running transport streams gaplessly if a performance backing track was disrupted mid-session
+        if !currentTrackName.isEmpty {
+            let cleanInputName = currentTrackName.replacingOccurrences(of: ".mp3", with: "").replacingOccurrences(of: ".m4a", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var targetURL: URL? = nil
+            
+            let factoryNames = ["Chrome_On_The_Curb", "JazzyFlow", "JazzyFlowDeep", "Late_August_Porch", "Low_Rider_Glide", "Morning_on_the_Deck", "Passing_Thru_Willow_Street", "Under_The_Surface"]
+            if factoryNames.contains(where: { $0.lowercased() == cleanInputName.lowercased() }) {
+                targetURL = Bundle.main.url(forResource: cleanInputName, withExtension: "mp3")
+            } else {
+                targetURL = LocalStorageManager.shared.resolveAudioURL(for: currentTrackName)
+            }
+            
+            if let url = targetURL {
+                do {
+                    try newPlayer.load(url: url)
+                    if let settings = settingsReference {
+                        newTimePitch.rate = Float(settings.playbackSpeed)
+                        newTimePitch.pitch = Float(settings.pitchShiftSemitones * 100)
+                    }
+                    if wasPlaying {
+                        newPlayer.seek(time: currentPlaybackPosition)
+                        newPlayer.play()
+                    }
+                } catch {
+                    print("⚠️ [Telemetry-Engine] Failed mapping hot-swap asset restoration steps: \(error.localizedDescription)")
                 }
             }
         }
+        
+        setupHardwareRouteObservers()
     }
     
     internal func setupAudioEngineGraph() {
@@ -48,6 +128,7 @@ extension AudioManager {
     
     internal func setupHardwareRouteObservers() {
         print("📡 [Telemetry-Engine] Registering Core Audio framework hardware alteration change listeners...")
+        NotificationCenter.default.removeObserver(self, name: .AVAudioEngineConfigurationChange, object: nil)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleEngineConfigurationChange),
@@ -70,22 +151,18 @@ extension AudioManager {
     internal func toggleHardwareMicMonitor(enabled: Bool) {
         print("🎙️ [Telemetry-Engine] Request to alter local microphone hardware live monitoring track lane: \(enabled)")
         
-        // Securely forward context changes onto the isolated main-actor recorder singleton instance
-        AudioRecorderManager.shared.updateMonitoringVolume(enabled: enabled)
+        let needsInputAccess = enabled || (settingsReference?.isRecordingSession ?? false)
         
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        do {
-            if enabled {
-                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP])
+        if needsInputAccess {
+            if !isInputAttached {
+                rebuildEngineGraph(includeInput: true)
             } else {
-                try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+                micMonitorMixer.volume = enabled ? 1.0 : 0.0
             }
-            try session.setActive(true)
-            print("📱 [Telemetry-Engine] Live monitoring session adjustment applied successfully.")
-        } catch {
-            print("⚠️ [Telemetry-Engine] Failed processing dynamic input monitoring route toggles: \(error.localizedDescription)")
+        } else {
+            if isInputAttached {
+                rebuildEngineGraph(includeInput: false)
+            }
         }
-        #endif
     }
 }
